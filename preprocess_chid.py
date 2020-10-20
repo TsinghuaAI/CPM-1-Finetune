@@ -47,7 +47,8 @@ for split in ["train", "dev"]:
     all_data = {
         "contents": [],
         "sids": [],
-        "labels": []
+        "labels": [],
+        "cids": []
     }
     sid = 0
     for line in tqdm(lines, desc="Preprocessing {}".format(split)):
@@ -56,11 +57,15 @@ for split in ["train", "dev"]:
             if split == "train":
                 sample = process_one_sent_train(sent, ans_d, jobj["candidates"])
                 all_data["contents"].append(sample)
+                all_data["sids"].append(sid)
+                all_data["cids"].append(0)
+                sid += 1
             else:
                 sample_L = process_one_sent_eval(sent, ans_d, jobj["candidates"])
                 for samp in sample_L:
                     all_data["contents"].extend(samp["cands"])
                     all_data["sids"].extend([sid for _ in samp["cands"]])
+                    all_data["cids"].extend([i for i in range(len(samp["cands"]))])
                     all_data["labels"].append(samp["truth"])
                     sid += 1
 

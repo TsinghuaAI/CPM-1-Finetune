@@ -120,13 +120,13 @@ class GPT2Dataset(Dataset):
         # data index in the shard.
         data_idx = idx - self.shards_start_index[shard_index]
         # Load the shard if it is not in memory.
-        #self.lock.acquire()
+        # self.lock.acquire()
         if self.shards_data[shard_index] is None:
             print('global rank {} is building data for shard index {} ...'.
                   format(torch.distributed.get_rank(), shard_index))
             self.build_dataset_(shard_index)
-        #assert self.shards_data[shard_index] is not None
-        #self.lock.release()
+        # assert self.shards_data[shard_index] is not None
+        # self.lock.release()
         # Start index.
         start_index = self.shards_sample_index[shard_index][data_idx]
         # Add one for label shift.
@@ -137,7 +137,7 @@ class GPT2Dataset(Dataset):
     def build_dataset_(self, shard_index):
         # Garbage collect so we don't use a lot of memory.
         # Leave the last one in case other threads have not catche up yet.
-        #for i in range(shard_index - 1):
+        # for i in range(shard_index - 1):
         for i in range(shard_index):
             self.shards_data[i] = None
             self.shards_sample_index[i] = None

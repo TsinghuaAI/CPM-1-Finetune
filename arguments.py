@@ -235,7 +235,7 @@ def add_data_args(parser):
     group.add_argument('--shuffle', action='store_true',
                        help='Shuffle data. Shuffling is deterministic '
                        'based on seed and current epoch.')
-    #group.add_argument('--train-data', nargs='+', default=None,
+    # group.add_argument('--train-data', nargs='+', default=None,
     #                   help='Whitespace separated filenames or corpora names '
     #                   'for training.')
     group.add_argument('--data-path', type=str, default=None,

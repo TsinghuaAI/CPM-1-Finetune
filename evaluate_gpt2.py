@@ -202,7 +202,7 @@ def forward_step(data_iterator, model, args, timers):
         output = model(tokens, position_ids, attention_mask)
 
     if not args.cloze_eval:
-        #losses = torch.nn.CrossEntropyLoss(reduce=False)(
+        # losses = torch.nn.CrossEntropyLoss(reduce=False)(
         losses = mpu.vocab_parallel_cross_entropy(
             output.contiguous().float(), lm_labels.contiguous())
         loss_mask = loss_mask.contiguous()
@@ -323,7 +323,7 @@ def initialize_distributed(args):
     # Call the init process
     init_method = 'tcp://'
     master_ip = os.getenv('MASTER_ADDR', 'localhost')
-    master_port = os.getenv('MASTER_PORT', '6000')
+    master_port = os.getenv('MASTER_PORT', '6100')
     init_method += master_ip + ':' + master_port
     torch.distributed.init_process_group(
         backend=args.distributed_backend,
@@ -475,7 +475,7 @@ def get_eval_data(args):
           'num_tokenized_tokens: {}'.format(
               torch.distributed.get_rank(), args.vocab_size,
               args.eod_token, args.num_examples, args.num_original_tokens,
-              args.num_tokenized_tokens ))
+              args.num_tokenized_tokens))
     return val_dataloader
 
 def main():
@@ -507,7 +507,7 @@ def main():
         from pytorch_pretrained_bert import GPT2Model as HFGPT2Model
         if args.num_layers == 24:
             model_path = args.load
-            #model_path = '/home/universal-lm-data.cosmos549/repos/gpt2_mp/models/345M'
+            # model_path = '/home/universal-lm-data.cosmos549/repos/gpt2_mp/models/345M'
             hfmodel = HFGPT2Model.from_pretrained(model_path, cache_dir='gpt2_weights', from_tf=True).cuda()
             model = GPT2LMHeadModel(hfmodel.config)
             model.transformer.load_state_dict(hfmodel.state_dict())
@@ -528,7 +528,7 @@ def main():
             print('loading openai weights')
             model.cpu()
             if args.num_layers == 24:
-                #model_path = '/home/universal-lm-data.cosmos549/repos/gpt2_mp/models/345M'
+                # model_path = '/home/universal-lm-data.cosmos549/repos/gpt2_mp/models/345M'
                 hfmodel = HFGPT2Model.from_pretrained(model_path, cache_dir='gpt2_weights', from_tf=True)
                 gpt2model = GPT2LMHeadModel(hfmodel.config)
                 gpt2model.transformer.load_state_dict(hfmodel.state_dict())

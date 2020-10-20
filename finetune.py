@@ -29,7 +29,7 @@ from pretrain_gpt2 import set_random_seed
 from pretrain_gpt2 import get_train_val_test_data
 from pretrain_gpt2 import get_masks_and_position_ids
 from utils import load_checkpoint
-#from data_utils import make_tokenizer
+# from data_utils import make_tokenizer
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
 from configure_data import configure_data
 import mpu
@@ -68,7 +68,7 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
         logits[indices_to_remove] = filter_value
         
     if top_p > 0.0:
-        #convert to 1D
+        # convert to 1D
         logits=logits.view(logits.size()[1]).contiguous()
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
         cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
@@ -80,9 +80,9 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
         sorted_indices_to_remove[..., 0] = 0
         indices_to_remove = sorted_indices[sorted_indices_to_remove]
         logits[indices_to_remove] = filter_value
-        #going back to 2D
+        # going back to 2D
         logits=logits.view(1, -1).contiguous()
-	
+
     return logits
 
 
@@ -209,12 +209,12 @@ def main():
     # Random seeds for reproducability.
     set_random_seed(args.seed)
 
-    #get the tokenizer
+    # get the tokenizer
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader = load_data('/data/zzy/afqmc', 'train', tokenizer)
-    dev_dataloader = load_data('/data/zzy/afqmc', 'dev', tokenizer)
+    train_dataloader = load_data('/data/gyx/afqmc', 'train', tokenizer)
+    dev_dataloader = load_data('/data/gyx/afqmc', 'dev', tokenizer)
 
     args.train_iters = len(train_dataloader)
 
@@ -230,6 +230,12 @@ def main():
             attention_mask = attention_mask[0, :, :, :, :]
             tokens = tokens.squeeze(1)
             position_ids = position_ids.squeeze(1)
+
+            print(tokens.size())
+            print(position_ids.size())
+            print(attention_mask[0].size())
+            exit(0)
+
             output = model(tokens, position_ids, attention_mask[0])
             output = output[tokens == 7, :].unsqueeze(1)
             losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
@@ -272,6 +278,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
