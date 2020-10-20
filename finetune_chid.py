@@ -23,6 +23,7 @@ import torch.nn.functional as F
 import argparse
 import time
 import json
+import pickle
 from arguments import get_args
 from utils import Timers
 from pretrain_gpt2 import initialize_distributed
@@ -48,6 +49,9 @@ from torch.utils.data import TensorDataset
 
 from pretrain_gpt2 import *
 
+def yprint(str):
+    print("\033[43;30m{}\033[0m".format(str))
+
 class CHIDDataset(torch.utils.data.Dataset):
     def __init__(self, args, data_path, split, tokenizer, ratio=1):
         self.split = split
@@ -56,16 +60,27 @@ class CHIDDataset(torch.utils.data.Dataset):
         self.args = args
         self.world_size = args.world_size
 
-        with open(data_path, "r") as f:
-            data = json.load(f)
-            # train: {"contents": ["谈到巴萨目前的成就", ...], "sids": [0, 1, 2, 3, ...], "labels": []}
-            # dev: {"contents": ["中国青年报：篮协改革切莫因噎废食", ...], "sids": [0, 0, ..., 1, 1, ...], "labels": [5, 1, 4, 3, ...]}
-
         self.pad_id = tokenizer.encoder['<pad>']
         self.eod_token = tokenizer.encoder['<eod>']
         args.eod_token = tokenizer.encoder['<eod>']
-    
-        self.seq, self.sizes, self.truth_labels = self.process(data)
+
+        if os.path.exists(data_path + "_cache.pkl"):
+            if torch.distributed.get_rank() == 0:
+                yprint("Load from cache: {}".format(data_path + "_cache.pkl"))
+            with open(data_path + "_cache.pkl", "rb") as f:
+                self.seq, self.sizes, self.truth_labels = pickle.load(f)
+        else:
+            with open(data_path, "r") as f:
+                data = json.load(f)
+                # train: {"contents": ["谈到巴萨目前的成就", ...], "sids": [0, 1, 2, 3, ...], "labels": []}
+                # dev: {"contents": ["中国青年报：篮协改革切莫因噎废食", ...], "sids": [0, 0, ..., 1, 1, ...], "labels": [5, 1, 4, 3, ...]}
+            if torch.distributed.get_rank() == 0:
+                yprint("Preprocessing dataset")
+            self.seq, self.sizes, self.truth_labels = self.process(data)
+            if torch.distributed.get_rank() == 0:
+                yprint("Save to cache: {}".format(data_path + "_cache.pkl"))
+                with open(data_path + "_cache.pkl", "wb") as f:
+                    pickle.dump((self.seq, self.sizes, self.truth_labels), f)
 
         self.max_size = max(self.sizes)
 
@@ -89,10 +104,8 @@ class CHIDDataset(torch.utils.data.Dataset):
                 "labels": input_ids[1:]
             })
 
-        print(max(sizes))
-        print(sum([int(x > 256) for x in sizes]))
-        print(sum([int(x > 384) for x in sizes]))
-        print(sum([int(x > 512) for x in sizes]))
+        if torch.distributed.get_rank() == 0:
+            yprint(max(sizes))
 
         return seq, sizes, truth_labels
 
@@ -202,8 +215,8 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 0.01)
-    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 0.01)
+    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
+    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
 
     args.train_iters = len(train_dataloader)
 
@@ -237,10 +250,12 @@ def main():
             loss.data = loss.data / args.world_size
             total_loss += loss.item()
 
-            if global_step % args.log_interval == 0:
+            if global_step != 0 and global_step % args.log_interval == 0:
                 if torch.distributed.get_rank() == 0:
-                    print("train lm loss: {}".format((total_loss - logging_loss) / args.log_interval))
+                    yprint("train lm loss: {}".format((total_loss - logging_loss) / args.log_interval))
                 logging_loss = total_loss
+
+            global_step += 1
 
         model.eval()
         all_sids = []
@@ -251,7 +266,7 @@ def main():
                 for k in batch:
                     batch[k] = batch[k].to(device)
                 for k in no_model_batch:
-                    no_model_batch[k] = no_model_seq[k].to(device)
+                    no_model_batch[k] = no_model_batch[k].to(device)
                 
                 output = model(**batch)
                 losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"])
@@ -285,7 +300,7 @@ def main():
 
             preds = [max(p, key=lambda x: x[1])[0] for p in preds]
 
-            print(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels))
+            yprint(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels))
 
 if __name__ == "__main__":
     # args = get_args()
