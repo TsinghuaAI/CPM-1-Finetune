@@ -231,11 +231,6 @@ def main():
             tokens = tokens.squeeze(1)
             position_ids = position_ids.squeeze(1)
 
-            print(tokens.size())
-            print(position_ids.size())
-            print(attention_mask[0].size())
-            exit(0)
-
             output = model(tokens, position_ids, attention_mask[0])
             output = output[tokens == 7, :].unsqueeze(1)
             losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
