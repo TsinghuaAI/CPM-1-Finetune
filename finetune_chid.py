@@ -202,8 +202,8 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
-    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
+    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 0.01)
+    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 0.01)
 
     args.train_iters = len(train_dataloader)
 
@@ -213,6 +213,10 @@ def main():
 
     epoch = 3
     device = torch.cuda.current_device()
+
+    total_loss = 0
+    logging_loss = 0
+    global_step = 0
     for e in range(epoch):
         model.train()
         for batch, no_model_batch in train_dataloader:
@@ -231,9 +235,12 @@ def main():
 
             torch.distributed.all_reduce(loss.data)
             loss.data = loss.data / args.world_size
+            total_loss += loss.item()
 
-            if torch.distributed.get_rank() == 0:
-                print("train lm loss: {}".format(loss.item()))
+            if global_step % args.log_interval == 0:
+                if torch.distributed.get_rank() == 0:
+                    print("train lm loss: {}".format((total_loss - logging_loss) / args.log_interval))
+                logging_loss = total_loss
 
         model.eval()
         all_sids = []

@@ -232,11 +232,21 @@ def main():
             position_ids = position_ids.squeeze(1)
 
             output = model(tokens, position_ids, attention_mask[0])
+
+            if torch.distributed.get_rank() == 0:
+                print(output[0])
+                print(output.size())
+
             output = output[tokens == 7, :].unsqueeze(1)
-            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
+            losses = mpu.vocab_parallel_cross_entropy_two(output.contiguous().float(), labels)
             loss = losses.mean()
             model.backward(loss)
             model.step()
+
+            if torch.distributed.get_rank() == 0:
+                print(losses.view(-1))
+                print(loss)
+            exit(0)
 
             # if torch.distributed.get_rank() == 0:
             #     res = output.squeeze(1).cpu().detach().numpy()[:, 1:3]
