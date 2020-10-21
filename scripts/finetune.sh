@@ -36,6 +36,6 @@ python3 -m torch.distributed.launch --master_port 4321 --nproc_per_node 4 finetu
        --vocab-size 30000 \
        --lr 0.000005 \
        --warmup .1 \
-       --batch-size 2 \
+       --batch-size 4 \
        --deepspeed \
        --deepspeed_config ${config_json}

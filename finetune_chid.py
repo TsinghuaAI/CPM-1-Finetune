@@ -24,6 +24,7 @@ import argparse
 import time
 import json
 import pickle
+from tqdm import tqdm
 from arguments import get_args
 from utils import Timers
 from pretrain_gpt2 import initialize_distributed
@@ -232,7 +233,7 @@ def main():
     global_step = 0
     for e in range(epoch):
         model.train()
-        for batch, no_model_batch in train_dataloader:
+        for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
             for k in batch:
                 batch[k] = batch[k].to(device)
             for k in no_model_batch:
@@ -252,7 +253,7 @@ def main():
 
             if global_step != 0 and global_step % args.log_interval == 0:
                 if torch.distributed.get_rank() == 0:
-                    yprint("train lm loss: {}".format((total_loss - logging_loss) / args.log_interval))
+                    yprint("epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval))
                 logging_loss = total_loss
 
             global_step += 1
