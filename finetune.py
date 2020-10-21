@@ -115,8 +115,6 @@ def load_data(data_path, data_type, tokenizer):
     import json
 
     args = get_args()
-    batch_size = args.batch_size
-    args.batch_size = 1
 
     filename = os.path.join(data_path, data_type+'.json')
     objs = []
@@ -132,8 +130,7 @@ def load_data(data_path, data_type, tokenizer):
 
     all_tokens = []
     all_labels = []
-    all_attention_mask = []
-    all_position_ids = []
+    all_masks = []
     for obj in objs:
         sentence1 = obj['sentence1']
         sentence2 = obj['sentence2']
@@ -143,32 +140,32 @@ def load_data(data_path, data_type, tokenizer):
         tokens = sentence1 + [sep_token] + sentence2
         tokens = tokens[:256]
         tokens = tokens + [eod_token]
+        second_mask = [0] * 256
+        for i in range(len(sentence1)+1, len(tokens)-1):
+            second_mask[i] = 1
+        all_masks.append(second_mask)
 
         token_length = len(tokens)
         if token_length < 256:
             tokens.extend([pad_id] * (256 - token_length))
-        tokens_tensor = torch.LongTensor(tokens)
-        tokens, attention_mask, position_ids = get_batch(tokens_tensor, args)
+        # tokens_tensor = torch.LongTensor(tokens)
+        # tokens, attention_mask, position_ids = get_batch(tokens_tensor, args)
 
         all_tokens.append(tokens)
-        all_attention_mask.append(attention_mask)
-        all_position_ids.append(position_ids)
         
         if obj['label'] == '0':
             all_labels.append([1])
         else:
             all_labels.append([2])
 
-    all_tokens = torch.stack(all_tokens).cpu()
-    all_attention_mask = torch.stack(all_attention_mask).cpu()
-    all_position_ids = torch.stack(all_position_ids).cpu()
+    all_tokens = torch.tensor(all_tokens, dtype=torch.long)
     all_labels = torch.tensor(all_labels, dtype=torch.long)
-    dataset = TensorDataset(all_tokens, all_attention_mask, all_position_ids, all_labels)
+    all_masks = torch.tensor(all_masks, dtype=torch.float)
+    dataset = TensorDataset(all_tokens, all_labels, all_masks)
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
     rank = mpu.get_data_parallel_rank()
-    args.batch_size = batch_size
     global_batch_size = args.batch_size * world_size
     num_workers = args.num_workers
 
@@ -188,6 +185,36 @@ def load_data(data_path, data_type, tokenizer):
                                        batch_sampler=batch_sampler,
                                        num_workers=num_workers,
                                        pin_memory=True)
+
+def evaluate(model, dev_dataloader, device, args):
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for batch in dev_dataloader:
+            tokens, labels, masks = [x.to(device) for x in batch]
+            tokens, attention_mask, position_ids = get_batch(tokens, args)
+            output = model(tokens, position_ids, attention_mask)
+            # output = output[tokens == 7, :]
+            output = torch.sum(output * masks.unsqueeze(-1), 1) / torch.sum(masks, -1).unsqueeze(-1)
+
+            tensor_list = [torch.zeros_like(output) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(tensor_list, output, mpu.get_data_parallel_group())
+
+            tensor_list_labels = [torch.zeros_like(labels) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(tensor_list_labels, labels, mpu.get_data_parallel_group())
+
+            if torch.distributed.get_rank() == 0:
+                output = torch.stack(tensor_list, 0).view([-1, 512])
+                res = output.cpu().detach().numpy()[:, 1:3]
+                labels = torch.stack(tensor_list_labels, 0)
+                labels = labels.view(-1).cpu().detach().numpy()
+                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res, labels)]
+                correct += sum(res)
+                total += len(res)
+    
+    if torch.distributed.get_rank() == 0:
+        print("EVAL", correct, total)
 
 def main():
     """Main training program."""
@@ -216,59 +243,36 @@ def main():
     train_dataloader = load_data('/data/zzy/afqmc', 'train', tokenizer)
     dev_dataloader = load_data('/data/zzy/afqmc', 'dev', tokenizer)
 
-    args.train_iters = len(train_dataloader)
+    epoch = 3
+    device = torch.cuda.current_device()
+
+    args.train_iters = len(train_dataloader) * epoch / 4
+    args.eod_token = tokenizer.encoder['<eod>']
 
     # Model, optimizer, and learning rate.
     # TODO: maybe need to reinitialize optimizer
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
 
-    epoch = 3
-    device = torch.cuda.current_device()
     for _ in range(epoch):
+        model.train()
         for batch in train_dataloader:
-            tokens, attention_mask, position_ids, labels = [x.to(device) for x in batch]
-            attention_mask = attention_mask[0, :, :, :, :]
-            tokens = tokens.squeeze(1)
-            position_ids = position_ids.squeeze(1)
-            output = model(tokens, position_ids, attention_mask[0])
-            output = output[tokens == 7, :].unsqueeze(1)
+            tokens, labels, masks = [x.to(device) for x in batch]
+            tokens, attention_mask, position_ids = get_batch(tokens, args)
+            output = model(tokens, position_ids, attention_mask)
+            # output = output[tokens == 7, :]
+            output = torch.sum(output * masks.unsqueeze(-1), 1) / torch.sum(masks, -1).unsqueeze(-1)
+            output = output.unsqueeze(1)
             losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
             loss = losses.mean()
             model.backward(loss)
             model.step()
 
-            # if torch.distributed.get_rank() == 0:
-            #     res = output.squeeze(1).cpu().detach().numpy()[:, 1:3]
-            #     labels = labels.view(-1).cpu().detach().numpy()
-            #     res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res,labels)]
-            #     print("acc", sum(res)/len(res), "loss", loss)
-                
-
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch in dev_dataloader:
-            tokens, attention_mask, position_ids, labels = [x.to(device) for x in batch]
-            attention_mask = attention_mask[0, :, :, :, :]
-            tokens = tokens.squeeze(1)
-            position_ids = position_ids.squeeze(1)
-            output = model(tokens, position_ids, attention_mask[0])
-            output = output[tokens == 7, :]
-
-            tensor_list = [torch.zeros_like(output), torch.zeros_like(output)]
-            torch.distributed.all_gather(tensor_list, output, mpu.get_data_parallel_group())
-
             if torch.distributed.get_rank() == 0:
-                output = torch.stack(tensor_list, 0).view([-1, 15000])
-                res = output.cpu().detach().numpy()[:, 1:3]
+                res = output.squeeze(1).cpu().detach().numpy()[:, 1:3]
                 labels = labels.view(-1).cpu().detach().numpy()
-                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res, labels)]
-                correct += sum(res)
-                total += len(res)
-    
-    if torch.distributed.get_rank() == 0:
-        print(correct, total)
+                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res,labels)]
+                print("acc", sum(res)/len(res), "loss", loss)
+        evaluate(model, dev_dataloader, device, args)
 
 if __name__ == "__main__":
     main()

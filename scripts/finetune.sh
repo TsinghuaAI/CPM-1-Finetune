@@ -17,7 +17,7 @@ script_path=$(realpath $0)
 script_dir=$(dirname $script_path)
 config_json="$script_dir/ds_finetune.json"
 
-python -m torch.distributed.launch --nproc_per_node 4 finetune.py \
+python -m torch.distributed.launch --nproc_per_node 8 finetune.py \
        --model-parallel-size $MPSIZE \
        --num-layers $NLAYERS \
        --hidden-size $NHIDDEN \
@@ -34,8 +34,8 @@ python -m torch.distributed.launch --nproc_per_node 4 finetune.py \
        --top_p $TOPP \
        --tokenizer-path ~/bpe/bpe_3w/ \
        --vocab-size 30000 \
-       --lr 0.000005 \
-       --warmup .1 \
-       --batch_size 16 \
+       --lr 0.00003 \
+       --warmup 0.1 \
+       --batch-size 8 \
        --deepspeed \
        --deepspeed_config ${config_json}
