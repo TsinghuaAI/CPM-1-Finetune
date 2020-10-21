@@ -62,6 +62,9 @@ class GPT2Model(torch.nn.Module):
         self.word_embeddings = mpu.VocabParallelEmbedding(
             vocab_size, hidden_size, init_method=init_method)
 
+        self.cls = mpu.VocabParallelEmbedding(
+            1024, hidden_size, init_method=init_method)
+
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(max_sequence_length,
                                                       hidden_size)
@@ -97,13 +100,22 @@ class GPT2Model(torch.nn.Module):
         transformer_output_parallel = mpu.copy_to_model_parallel_region(
             transformer_output)
         logits_parallel = F.linear(transformer_output_parallel,
-                                   self.word_embeddings.weight)
+                                   self.cls.weight)
 
         if self.parallel_output:
             return logits_parallel
 
         return mpu.gather_from_model_parallel_region(logits_parallel)
 
+
+def judge_name(name):
+    print(name)
+    if "embedding" in name:
+        return False
+    for i in range(28):
+        if str(i) in name:
+            return False
+    return True
 
 def gpt2_get_params_for_weight_decay_optimization(module):
 
@@ -112,14 +124,15 @@ def gpt2_get_params_for_weight_decay_optimization(module):
     for module_ in module.modules():
         if isinstance(module_, (mpu.LayerNorm, torch.nn.LayerNorm)):
             no_weight_decay_params['params'].extend(
-                [p for p in list(module_._parameters.values())
-                 if p is not None])
+                [p for n, p in list(module_._parameters.items())
+                 if p is not None and judge_name(n)])
         else:
             weight_decay_params['params'].extend(
                 [p for n, p in list(module_._parameters.items())
-                 if p is not None and n != 'bias'])
+                 if p is not None and n != 'bias' and judge_name(n)])
             no_weight_decay_params['params'].extend(
                 [p for n, p in list(module_._parameters.items())
-                 if p is not None and n == 'bias'])
+                 if p is not None and n == 'bias' and judge_name(n)])
 
+    print(len(weight_decay_params['params']), len(no_weight_decay_params['params']))
     return weight_decay_params, no_weight_decay_params
