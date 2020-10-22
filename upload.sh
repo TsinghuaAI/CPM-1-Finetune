@@ -1,0 +1,1 @@
+rsync -avzP ./* cgpt10:~/gpt-finetune/

@@ -65,10 +65,10 @@ class CHIDDataset(torch.utils.data.Dataset):
         self.eod_token = tokenizer.encoder['<eod>']
         args.eod_token = tokenizer.encoder['<eod>']
 
-        if os.path.exists(data_path + "_cache.pkl"):
+        if os.path.exists(data_path + "{}_cache.pkl".format(ratio)):
             if torch.distributed.get_rank() == 0:
-                yprint("Load from cache: {}".format(data_path + "_cache.pkl"))
-            with open(data_path + "_cache.pkl", "rb") as f:
+                yprint("Load from cache: {}".format(data_path + "{}_cache.pkl".format(ratio)))
+            with open(data_path + "{}_cache.pkl".format(ratio), "rb") as f:
                 self.seq, self.sizes, self.truth_labels = pickle.load(f)
         else:
             with open(data_path, "r") as f:
@@ -79,8 +79,8 @@ class CHIDDataset(torch.utils.data.Dataset):
                 yprint("Preprocessing dataset")
             self.seq, self.sizes, self.truth_labels = self.process(data)
             if torch.distributed.get_rank() == 0:
-                yprint("Save to cache: {}".format(data_path + "_cache.pkl"))
-                with open(data_path + "_cache.pkl", "wb") as f:
+                yprint("Save to cache: {}".format(data_path + "{}_cache.pkl".format(ratio)))
+                with open(data_path + "{}_cache.pkl".format(ratio), "wb") as f:
                     pickle.dump((self.seq, self.sizes, self.truth_labels), f)
 
         self.max_size = max(self.sizes)
@@ -219,18 +219,23 @@ def main():
     train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
     dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
 
-    args.train_iters = len(train_dataloader)
+    epoch = 3
+    grad_acc = 16
+    args.train_iters = len(train_dataloader) * epoch / grad_acc
 
     # Model, optimizer, and learning rate.
     # TODO: maybe need to reinitialize optimizer
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
 
-    epoch = 3
     device = torch.cuda.current_device()
+
+    if torch.distributed.get_rank() == 0:
+        os.makedirs("results/", exist_ok=True)
 
     total_loss = 0
     logging_loss = 0
     global_step = 0
+    total_step = 0
     for e in range(epoch):
         model.train()
         for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
@@ -238,12 +243,11 @@ def main():
                 batch[k] = batch[k].to(device)
             for k in no_model_batch:
                 no_model_batch[k] = no_model_batch[k].to(device)
-
             output = model(**batch)
-            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"])
+            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"], ignore_index=tokenizer.encoder['<pad>'])
             loss_mask = no_model_batch["loss_mask"].view(-1)
             loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
-            
+
             model.backward(loss)
             model.step()
 
@@ -251,19 +255,21 @@ def main():
             loss.data = loss.data / args.world_size
             total_loss += loss.item()
 
-            if global_step != 0 and global_step % args.log_interval == 0:
-                if torch.distributed.get_rank() == 0:
-                    yprint("epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval))
-                logging_loss = total_loss
-
-            global_step += 1
+            if total_step % grad_acc == 0:
+                global_step += 1
+                if global_step != 0 and global_step % args.log_interval == 0:
+                    if torch.distributed.get_rank() == 0:
+                        yprint("epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval))
+                    logging_loss = total_loss
+                    
+            total_step += 1
 
         model.eval()
         all_sids = []
         all_cids = []
         all_losses = []
         with torch.no_grad():
-            for batch, no_model_batch in dev_dataloader:
+            for batch, no_model_batch in tqdm(dev_dataloader, desc="Evaluating"):
                 for k in batch:
                     batch[k] = batch[k].to(device)
                 for k in no_model_batch:
@@ -301,7 +307,9 @@ def main():
 
             preds = [max(p, key=lambda x: x[1])[0] for p in preds]
 
-            yprint(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels))
+            yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels)))
+            with open("results/eval_e{}.txt".format(e)) as f:
+                f.write("Acc: {}\n".format(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels)))
 
 if __name__ == "__main__":
     # args = get_args()

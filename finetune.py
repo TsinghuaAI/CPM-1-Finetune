@@ -29,7 +29,7 @@ from pretrain_gpt2 import set_random_seed
 from pretrain_gpt2 import get_train_val_test_data
 from pretrain_gpt2 import get_masks_and_position_ids
 from utils import load_checkpoint
-# from data_utils import make_tokenizer
+#from data_utils import make_tokenizer
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
 from configure_data import configure_data
 import mpu
@@ -68,7 +68,7 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
         logits[indices_to_remove] = filter_value
         
     if top_p > 0.0:
-        # convert to 1D
+        #convert to 1D
         logits=logits.view(logits.size()[1]).contiguous()
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
         cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
@@ -80,9 +80,9 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
         sorted_indices_to_remove[..., 0] = 0
         indices_to_remove = sorted_indices[sorted_indices_to_remove]
         logits[indices_to_remove] = filter_value
-        # going back to 2D
+        #going back to 2D
         logits=logits.view(1, -1).contiguous()
-
+	
     return logits
 
 
@@ -132,31 +132,25 @@ def load_data(data_path, data_type, tokenizer):
     all_labels = []
     all_masks = []
     for obj in objs:
-        sentence1 = obj['sentence1']
-        sentence2 = obj['sentence2']
-        sentence1 = tokenizer.encode(sentence1)
-        sentence2 = tokenizer.encode(sentence2)
-        # TODO random truncate
-        tokens = sentence1 + [sep_token] + sentence2
-        tokens = tokens[:256]
-        tokens = tokens + [eod_token]
+        sentence1 = "上句：" + obj['sentence1']
+        sentence2 = " 下句：" + obj['sentence2'] + " 答案："
+        tokens = tokenizer.encode(sentence1+sentence2)
         second_mask = [0] * 256
-        for i in range(len(sentence1)+1, len(tokens)-1):
-            second_mask[i] = 1
+        second_mask[len(tokens)-1] = 1
         all_masks.append(second_mask)
 
         token_length = len(tokens)
-        if token_length < 256:
-            tokens.extend([pad_id] * (256 - token_length))
+        assert token_length < 256
+        tokens.extend([pad_id] * (256 - token_length))
         # tokens_tensor = torch.LongTensor(tokens)
         # tokens, attention_mask, position_ids = get_batch(tokens_tensor, args)
 
         all_tokens.append(tokens)
         
         if obj['label'] == '0':
-            all_labels.append([1])
+            all_labels.append([124])
         else:
-            all_labels.append([2])
+            all_labels.append([15])
 
     all_tokens = torch.tensor(all_tokens, dtype=torch.long)
     all_labels = torch.tensor(all_labels, dtype=torch.long)
@@ -205,11 +199,11 @@ def evaluate(model, dev_dataloader, device, args):
             torch.distributed.all_gather(tensor_list_labels, labels, mpu.get_data_parallel_group())
 
             if torch.distributed.get_rank() == 0:
-                output = torch.stack(tensor_list, 0).view([-1, 512])
-                res = output.cpu().detach().numpy()[:, 1:3]
+                output = torch.stack(tensor_list, 0).view([-1, 15000])
+                res = output.cpu().detach().numpy()
                 labels = torch.stack(tensor_list_labels, 0)
                 labels = labels.view(-1).cpu().detach().numpy()
-                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res, labels)]
+                res = [124==y if x[124] > x[15] else 15==y for x, y in zip(res, labels)]
                 correct += sum(res)
                 total += len(res)
     
@@ -236,7 +230,7 @@ def main():
     # Random seeds for reproducability.
     set_random_seed(args.seed)
 
-    # get the tokenizer
+    #get the tokenizer
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
@@ -257,22 +251,27 @@ def main():
         model.train()
         for batch in train_dataloader:
             tokens, labels, masks = [x.to(device) for x in batch]
+            print(tokens[0])
+            exit(0)
             tokens, attention_mask, position_ids = get_batch(tokens, args)
             output = model(tokens, position_ids, attention_mask)
             # output = output[tokens == 7, :]
             output = torch.sum(output * masks.unsqueeze(-1), 1) / torch.sum(masks, -1).unsqueeze(-1)
             output = output.unsqueeze(1)
-            losses = mpu.vocab_parallel_cross_entropy_two(output.contiguous().float(), labels)
+            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
             loss = losses.mean()
             model.backward(loss)
             model.step()
 
             if torch.distributed.get_rank() == 0:
-                res = output.squeeze(1).cpu().detach().numpy()[:, 1:3]
+                res = output.squeeze(1).cpu().detach().numpy()
                 labels = labels.view(-1).cpu().detach().numpy()
-                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res,labels)]
+                res = [124==y if x[124] > x[15] else 15==y for x, y in zip(res,labels)]
                 print("acc", sum(res)/len(res), "loss", loss)
         evaluate(model, dev_dataloader, device, args)
 
 if __name__ == "__main__":
     main()
+
+
+

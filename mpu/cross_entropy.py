@@ -25,7 +25,7 @@ from .utils import VocabUtility
 class _VocabParallelCrossEntropy(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, vocab_parallel_logits, target):
+    def forward(ctx, vocab_parallel_logits, target, ignore_index=-100):
 
         # Copy so the input remains unchanged.
         logits = vocab_parallel_logits.clone()
@@ -52,7 +52,7 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
             partition_vocab_size, rank, world_size)
 
         # Create a mask of valid vocab ids (1 means it needs to be masked).
-        target_mask = (target < vocab_start_index) | (target >= vocab_end_index)
+        target_mask = (target < vocab_start_index) | (target >= vocab_end_index) | (target == ignore_index)
         masked_target = target.clone() - vocab_start_index
         masked_target[target_mask] = 0
 
@@ -104,6 +104,6 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         return grad_input, None
 
 
-def vocab_parallel_cross_entropy(vocab_parallel_logits, target):
+def vocab_parallel_cross_entropy(vocab_parallel_logits, target, ignore_index=-100):
     """Helper function for the cross entropy."""
-    return _VocabParallelCrossEntropy.apply(vocab_parallel_logits, target)
+    return _VocabParallelCrossEntropy.apply(vocab_parallel_logits, target, ignore_index)

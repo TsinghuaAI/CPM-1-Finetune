@@ -75,7 +75,7 @@ def get_model(args):
             mpu.get_model_parallel_rank(),
             sum([p.nelement() for p in model.parameters()])), flush=True)
 
-    # To prevent OOM for model sizes that cannot fit in GPU memory in full precision
+    #To prevent OOM for model sizes that cannot fit in GPU memory in full precision
     if args.deepspeed and args.fp16:
         model.half()
 
@@ -373,7 +373,7 @@ def see_memory_usage(message, force=False):
         print("Cache Allocated ", torch.cuda.memory_cached()/(1024*1024*1024), "GigaBytes")
         print("Max cache Allocated ", torch.cuda.max_memory_cached()/(1024*1024*1024), "GigaBytes")
         print(" ")
-        # input("Press Any Key To Continue ..")
+        #input("Press Any Key To Continue ..")
 
 def train_step(data_iterator, model, optimizer, lr_scheduler,
                args, timers):
@@ -384,7 +384,7 @@ def train_step(data_iterator, model, optimizer, lr_scheduler,
     lm_loss = forward_step(data_iterator, model, args, timers)
     timers('forward').stop()
 
-    # print_rank_0("loss is {}".format(lm_loss))
+    #print_rank_0("loss is {}".format(lm_loss))
 
     # Calculate gradients, reduce across processes, and clip.
     timers('backward').start()
@@ -572,7 +572,7 @@ def initialize_distributed(args):
     # Call the init process
     init_method = 'tcp://'
     master_ip = os.getenv('MASTER_ADDR', 'localhost')
-    master_port = os.getenv('MASTER_PORT', '8100')
+    master_port = os.getenv('MASTER_PORT', '6000')
     init_method += master_ip + ':' + master_port
     torch.distributed.init_process_group(
         backend=args.distributed_backend,
@@ -698,25 +698,25 @@ def main():
                     train_valid_test_dataset_provider, args)
 
     # Resume data loader if necessary.
-    # if args.resume_dataloader:
-    #     if train_data is not None:
-    #         train_data.batch_sampler.start_iter = args.iteration % \
-    #                                               len(train_data)
-    #     if val_data is not None:
-    #         start_iter_val = (args.train_iters // args.save_interval) * \
-    #                          args.eval_interval
-    #         val_data.batch_sampler.start_iter = start_iter_val % \
-    #                                             len(val_data)
-    # if train_data is not None:
-    #     train_data_iterator = iter(train_data)
-    # else:
-    #     train_data_iterator = None
-    # if val_data is not None:
-    #     val_data_iterator = iter(val_data)
-    # else:
-    #     val_data_iterator = None
+    #if args.resume_dataloader:
+    #    if train_data is not None:
+    #        train_data.batch_sampler.start_iter = args.iteration % \
+    #                                              len(train_data)
+    #    if val_data is not None:
+    #        start_iter_val = (args.train_iters // args.save_interval) * \
+    #                         args.eval_interval
+    #        val_data.batch_sampler.start_iter = start_iter_val % \
+    #                                            len(val_data)
+    #if train_data is not None:
+    #    train_data_iterator = iter(train_data)
+    #else:
+    #    train_data_iterator = None
+    #if val_data is not None:
+    #    val_data_iterator = iter(val_data)
+    #else:
+    #    val_data_iterator = None
 
-    # TODO: figure out how to properly set this especially when resuming training
+    #TODO: figure out how to properly set this especially when resuming training
     iteration = 0
     if args.train_iters > 0:
         iteration, skipped = train(model, optimizer,
@@ -732,10 +732,10 @@ def main():
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, lr_scheduler, args)
 
-    # if test_data is not None:
-    #     test_data_iterator = iter(test_data)
-    # else:
-    #     test_data_iterator = None
+    #if test_data is not None:
+    #    test_data_iterator = iter(test_data)
+    #else:
+    #    test_data_iterator = None
 
     if args.do_test:
         # Run on test data.
