@@ -37,13 +37,14 @@ from data_utils.tokenization_gpt2 import GPT2Tokenizer
 from configure_data import configure_data
 import mpu
 import deepspeed
+import json
 
 from tqdm import tqdm
 from fp16 import FP16_Module
 from model import GPT2Model
 from model import DistributedDataParallel as DDP
 from utils import print_rank_0
-from data.samplers import DistributedBatchSampler
+from data.samplers import DistributedBatchSampler, RandomSampler
 # from sklearn.metrics import accuracy_score
 
 from torch.utils.data import TensorDataset
@@ -176,7 +177,7 @@ def load_data(data_path, data_type, tokenizer, ratio=1):
     
     # Use a random sampler with distributed batch sampler.
     if data_type == 'train':
-        sampler = torch.utils.data.RandomSampler(dataset)
+        sampler = RandomSampler(dataset)
     else:
         sampler = torch.utils.data.SequentialSampler(dataset)
     batch_sampler = DistributedBatchSampler(sampler=sampler,
@@ -219,8 +220,11 @@ def main():
     train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
     dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
 
+    with open("scripts/ds_finetune.json", "r") as f:
+        deepspeed_conf = json.load(f)
+
     epoch = 3
-    grad_acc = 16
+    grad_acc = deepspeed_conf["gradient_accumulation_steps"]
     args.train_iters = len(train_dataloader) * epoch / grad_acc
 
     # Model, optimizer, and learning rate.
