@@ -44,12 +44,13 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         # Subtract the maximum value.
         logits.sub_(logits_max.unsqueeze(dim=-1))
         # Sum of exponential of logits along vocab dimension across all GPUs.
-        if vocab_start_index > 2:
+        if vocab_start_index > 128:
             exp_logits = logits.exp() * 0.
         else:
             exp_logits = logits.exp()
-            exp_logits[:, :, 0] = 0.
-            exp_logits[:, :, 3:] = 0.
+            exp_logits[:, :, 0:15] = 0.
+            exp_logits[:, :, 16:124] = 0.
+            exp_logits[:, :, 125:] = 0.
         sum_exp_logits = exp_logits.sum(dim=-1)
         torch.distributed.all_reduce(sum_exp_logits,
                                      op=torch.distributed.ReduceOp.SUM,

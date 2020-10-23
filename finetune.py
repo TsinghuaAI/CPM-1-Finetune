@@ -39,7 +39,7 @@ from fp16 import FP16_Module
 from model import GPT2Model
 from model import DistributedDataParallel as DDP
 from utils import print_rank_0
-from data.samplers import DistributedBatchSampler
+from data.samplers import DistributedBatchSampler, RandomSampler
 
 from torch.utils.data import TensorDataset
 
@@ -132,31 +132,25 @@ def load_data(data_path, data_type, tokenizer):
     all_labels = []
     all_masks = []
     for obj in objs:
-        sentence1 = obj['sentence1']
-        sentence2 = obj['sentence2']
-        sentence1 = tokenizer.encode(sentence1)
-        sentence2 = tokenizer.encode(sentence2)
-        # TODO random truncate
-        tokens = sentence1 + [sep_token] + sentence2
-        tokens = tokens[:256]
-        tokens = tokens + [eod_token]
+        sentence1 = "上句：" + obj['sentence1']
+        sentence2 = " 下句：" + obj['sentence2'] + " 答案："
+        tokens = tokenizer.encode(sentence1+sentence2)
         second_mask = [0] * 256
-        for i in range(len(sentence1)+1, len(tokens)-1):
-            second_mask[i] = 1
+        second_mask[len(tokens)-1] = 1
         all_masks.append(second_mask)
 
         token_length = len(tokens)
-        if token_length < 256:
-            tokens.extend([pad_id] * (256 - token_length))
+        assert token_length < 256
+        tokens.extend([pad_id] * (256 - token_length))
         # tokens_tensor = torch.LongTensor(tokens)
         # tokens, attention_mask, position_ids = get_batch(tokens_tensor, args)
 
         all_tokens.append(tokens)
         
         if obj['label'] == '0':
-            all_labels.append([1])
+            all_labels.append([124])
         else:
-            all_labels.append([2])
+            all_labels.append([15])
 
     all_tokens = torch.tensor(all_tokens, dtype=torch.long)
     all_labels = torch.tensor(all_labels, dtype=torch.long)
@@ -171,7 +165,7 @@ def load_data(data_path, data_type, tokenizer):
 
     # Use a random sampler with distributed batch sampler.
     if data_type == 'train':
-        sampler = torch.utils.data.RandomSampler(dataset)
+        sampler = RandomSampler(dataset)
     else:
         sampler = torch.utils.data.SequentialSampler(dataset)
     batch_sampler = DistributedBatchSampler(sampler=sampler,
@@ -205,11 +199,11 @@ def evaluate(model, dev_dataloader, device, args):
             torch.distributed.all_gather(tensor_list_labels, labels, mpu.get_data_parallel_group())
 
             if torch.distributed.get_rank() == 0:
-                output = torch.stack(tensor_list, 0).view([-1, 512])
-                res = output.cpu().detach().numpy()[:, 1:3]
+                output = torch.stack(tensor_list, 0).view([-1, 15000])
+                res = output.cpu().detach().numpy()
                 labels = torch.stack(tensor_list_labels, 0)
                 labels = labels.view(-1).cpu().detach().numpy()
-                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res, labels)]
+                res = [124==y if x[124] > x[15] else 15==y for x, y in zip(res, labels)]
                 correct += sum(res)
                 total += len(res)
     
@@ -246,7 +240,7 @@ def main():
     epoch = 3
     device = torch.cuda.current_device()
 
-    args.train_iters = len(train_dataloader) * epoch / 4
+    args.train_iters = len(train_dataloader) * epoch / 8
     args.eod_token = tokenizer.encoder['<eod>']
 
     # Model, optimizer, and learning rate.
@@ -268,9 +262,9 @@ def main():
             model.step()
 
             if torch.distributed.get_rank() == 0:
-                res = output.squeeze(1).cpu().detach().numpy()[:, 1:3]
+                res = output.squeeze(1).cpu().detach().numpy()
                 labels = labels.view(-1).cpu().detach().numpy()
-                res = [1==y if x[0] > x[1] else 2==y for x, y in zip(res,labels)]
+                res = [124==y if x[124] > x[15] else 15==y for x, y in zip(res,labels)]
                 print("acc", sum(res)/len(res), "loss", loss)
         evaluate(model, dev_dataloader, device, args)
 
