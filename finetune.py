@@ -39,7 +39,7 @@ from fp16 import FP16_Module
 from model import GPT2Model
 from model import DistributedDataParallel as DDP
 from utils import print_rank_0
-from data.samplers import DistributedBatchSampler
+from data.samplers import DistributedBatchSampler, RandomSampler
 
 from torch.utils.data import TensorDataset
 
@@ -165,7 +165,7 @@ def load_data(data_path, data_type, tokenizer):
 
     # Use a random sampler with distributed batch sampler.
     if data_type == 'train':
-        sampler = torch.utils.data.RandomSampler(dataset)
+        sampler = RandomSampler(dataset)
     else:
         sampler = torch.utils.data.SequentialSampler(dataset)
     batch_sampler = DistributedBatchSampler(sampler=sampler,
@@ -240,7 +240,7 @@ def main():
     epoch = 3
     device = torch.cuda.current_device()
 
-    args.train_iters = len(train_dataloader) * epoch / 4
+    args.train_iters = len(train_dataloader) * epoch / 8
     args.eod_token = tokenizer.encoder['<eod>']
 
     # Model, optimizer, and learning rate.
