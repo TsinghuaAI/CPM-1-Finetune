@@ -217,7 +217,7 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
+    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 0.002)
     dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
 
     with open("scripts/ds_finetune.json", "r") as f:
@@ -241,32 +241,32 @@ def main():
     global_step = 0
     total_step = 0
     for e in range(epoch):
-        model.train()
-        for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
-            for k in batch:
-                batch[k] = batch[k].to(device)
-            for k in no_model_batch:
-                no_model_batch[k] = no_model_batch[k].to(device)
-            output = model(**batch)
-            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"], ignore_index=tokenizer.encoder['<pad>'])
-            loss_mask = no_model_batch["loss_mask"].view(-1)
-            loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
+        # model.train()
+        # for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
+        #     for k in batch:
+        #         batch[k] = batch[k].to(device)
+        #     for k in no_model_batch:
+        #         no_model_batch[k] = no_model_batch[k].to(device)
+        #     output = model(**batch)
+        #     losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"], ignore_index=tokenizer.encoder['<pad>'])
+        #     loss_mask = no_model_batch["loss_mask"].view(-1)
+        #     loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
 
-            model.backward(loss)
-            model.step()
+        #     model.backward(loss)
+        #     model.step()
 
-            torch.distributed.all_reduce(loss.data)
-            loss.data = loss.data / args.world_size
-            total_loss += loss.item()
+        #     torch.distributed.all_reduce(loss.data)
+        #     loss.data = loss.data / args.world_size
+        #     total_loss += loss.item()
 
-            if total_step % grad_acc == 0:
-                global_step += 1
-                if global_step != 0 and global_step % args.log_interval == 0:
-                    if torch.distributed.get_rank() == 0:
-                        yprint("epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval))
-                    logging_loss = total_loss
+        #     if total_step % grad_acc == 0:
+        #         global_step += 1
+        #         if global_step != 0 and global_step % args.log_interval == 0:
+        #             if torch.distributed.get_rank() == 0:
+        #                 yprint("epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval))
+        #             logging_loss = total_loss
                     
-            total_step += 1
+        #     total_step += 1
 
         model.eval()
         all_sids = []
@@ -284,24 +284,24 @@ def main():
                 loss_mask = no_model_batch["loss_mask"]
                 loss = torch.sum(losses * loss_mask, dim=-1) / loss_mask.sum(dim=-1)
 
-                loss_tensor_list = [torch.zeros_like(loss).to(device) for _ in range(args.world_size)]
-                torch.distributed.all_gather(loss_tensor_list, loss.data)
+                loss_tensor_list = [torch.zeros_like(loss).to(device) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(loss_tensor_list, loss.data, group=mpu.get_data_parallel_group())
                 all_losses.extend(loss_tensor_list)
 
                 sids = no_model_batch["sids"]
-                sid_tensor_list = [torch.zeros_like(sids) for _ in range(args.world_size)]
-                torch.distributed.all_gather(sid_tensor_list, sids.data)
+                sid_tensor_list = [torch.zeros_like(sids) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(sid_tensor_list, sids.data, group=mpu.get_data_parallel_group())
                 all_sids.extend(sid_tensor_list)
 
                 cids = no_model_batch["cids"]
-                cid_tensor_list = [torch.zeros_like(cids) for _ in range(args.world_size)]
-                torch.distributed.all_gather(cid_tensor_list, cids.data)
+                cid_tensor_list = [torch.zeros_like(cids) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(cid_tensor_list, cids.data, group=mpu.get_data_parallel_group())
                 all_cids.extend(cid_tensor_list)
 
         if torch.distributed.get_rank() == 0:
-            all_losses = torch.stack(all_losses).cpu().detach().numpy()
-            all_sids = torch.stack(all_sids).cpu().detach().numpy()
-            all_cids = torch.stack(all_cids).cpu().detach().numpy()
+            all_losses = torch.stack(all_losses).view(-1).cpu().detach().numpy()
+            all_sids = torch.stack(all_sids).view(-1).cpu().detach().numpy()
+            all_cids = torch.stack(all_cids).view(-1).cpu().detach().numpy()
 
             truth_labels = dev_dataset.truth_labels
             preds = [[] for _ in truth_labels]
@@ -309,11 +309,13 @@ def main():
             for sid, cid, loss in zip(all_sids, all_cids, all_losses):
                 preds[sid].append((cid, loss))
 
-            preds = [max(p, key=lambda x: x[1])[0] for p in preds]
+            preds = [min(p, key=lambda x: x[1])[0] for p in preds if len(p) > 0]
 
             yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels)))
-            with open("results/eval_e{}.txt".format(e)) as f:
+            with open("results/eval_e{}.txt".format(e), "w") as f:
                 f.write("Acc: {}\n".format(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels)))
+
+        torch.distributed.barrier()
 
 if __name__ == "__main__":
     # args = get_args()
