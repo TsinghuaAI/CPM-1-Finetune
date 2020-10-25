@@ -294,12 +294,6 @@ def forward_step(data_iterator, model, args, timers):
     timers('batch generator').start()
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
         data_iterator, args, timers)
-    # if dist.get_rank() == 0:
-    #     print(attention_mask.shape)
-    #     print(tokens.shape)
-    #     print(position_ids.shape)
-    #     print(labels.shape)
-    # exit()
     timers('batch generator').stop()
 
     # Forward model.
