@@ -62,8 +62,8 @@ class GPT2Model(torch.nn.Module):
         self.word_embeddings = mpu.VocabParallelEmbedding(
             vocab_size, hidden_size, init_method=init_method)
 
-        self.cls = mpu.VocabParallelEmbedding(
-            1024, hidden_size, init_method=init_method)
+        #self.cls = mpu.VocabParallelEmbedding(
+        #    1024, hidden_size, init_method=init_method)
 
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(max_sequence_length,
