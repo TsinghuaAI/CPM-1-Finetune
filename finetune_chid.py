@@ -217,13 +217,13 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 0.002)
-    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 0.002)
+    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
+    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
 
     with open("scripts/ds_finetune.json", "r") as f:
         deepspeed_conf = json.load(f)
 
-    epoch = 20
+    epoch = 3
     grad_acc = deepspeed_conf["gradient_accumulation_steps"]
     args.train_iters = len(train_dataloader) * epoch / grad_acc
 
@@ -236,7 +236,7 @@ def main():
     if torch.distributed.get_rank() == 0:
         os.makedirs("results/", exist_ok=True)
 
-    with open("results/train_log.txt", "w") as f:
+    with open("results/train_log-{}.txt".format(args.seed), "w") as f:
         f.write("Train losses:\n")
 
     total_loss = 0
@@ -272,7 +272,7 @@ def main():
                     if torch.distributed.get_rank() == 0:
                         train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
                         yprint(train_log)
-                        with open("results/train_log.txt", "a") as f:
+                        with open("results/train_log_no_cls-{}.txt".format(args.seed), "a") as f:
                             f.write(train_log + "\n")
                         
                     logging_loss = total_loss
