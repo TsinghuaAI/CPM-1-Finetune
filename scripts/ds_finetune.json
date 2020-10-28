@@ -3,8 +3,7 @@
   "gradient_accumulation_steps": 16,
   "steps_per_print": 100000000,
   "zero_optimization": {
-    "stage": 2,
-    "load_from_fp32_weights": false
+    "stage": 2
   },
   "zero_allow_untested_optimizer": true,
   "gradient_clipping": 1.0,
