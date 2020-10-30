@@ -20,9 +20,12 @@ def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
             cands_ids.extend(tokenizer.encode(cand.strip()))
             cands_ids.append(tokenizer.encoder["<sep>"])
 
-        context_ids = tokenizer.encode("上下文:") + tokenizer.encode(sent[:m.start()].strip()) + [tokenizer.encoder["<mask>"]] + tokenizer.encode(sent[m.end():].strip()) + [tokenizer.encoder["<eod>"]]
+        prefix = re.sub(pattern, "", sent[:m.start()])
+        postfix = re.sub(pattern, "", sent[m.end():])
 
-        ques_ids = tokenizer.encode("答案是:") + [num_ids[answers[m.group()]]]
+        context_ids = tokenizer.encode("上下文:") + tokenizer.encode(prefix.strip()) + [tokenizer.encoder["<mask>"]] + tokenizer.encode(postfix.strip()) + [tokenizer.encoder["<eod>"]]
+
+        ques_ids = [tokenizer.encoder["<mask>"]] + tokenizer.encode("答案是:") + [num_ids[answers[m.group()]]]
         
         ids = cands_ids + context_ids + ques_ids
 
@@ -67,7 +70,7 @@ if __name__ == "__main__":
 
     for split in ["train", "dev"]:
         with open(os.path.join(data_dir, "{}.json".format(split)), "r") as f:
-            lines = f.readlines()[:1000]
+            lines = f.readlines()[:3000]
 
         with open(os.path.join(ans_data_dir, "{}_answer.json".format(split)), "r") as f:
             ans_d = json.load(f)
