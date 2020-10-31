@@ -32,7 +32,7 @@ def init_method_normal(std=0.02):
     return init_
 
 
-class GPT2Model(torch.nn.Module):
+class QAGPT2Model(torch.nn.Module):
     """GPT-2 Language model.
 
     The output of the forward method are the logits (parallel or
@@ -52,7 +52,7 @@ class GPT2Model(torch.nn.Module):
                  checkpoint_num_layers=1,
                  parallel_output=True):
 
-        super(GPT2Model, self).__init__()
+        super(QAGPT2Model, self).__init__()
 
         self.parallel_output = parallel_output
 
@@ -62,8 +62,8 @@ class GPT2Model(torch.nn.Module):
         self.word_embeddings = mpu.VocabParallelEmbedding(
             vocab_size, hidden_size, init_method=init_method)
 
-        # self.cls = mpu.VocabParallelEmbedding(
-        #     1024, hidden_size, init_method=init_method)
+        self.cls = mpu.VocabParallelEmbedding(
+            10, hidden_size, init_method=init_method)
 
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(max_sequence_length,
@@ -99,8 +99,9 @@ class GPT2Model(torch.nn.Module):
         # Parallel logits.
         transformer_output_parallel = mpu.copy_to_model_parallel_region(
             transformer_output)
+        
         logits_parallel = F.linear(transformer_output_parallel,
-                                   self.word_embeddings.weight)
+                                   self.cls.weight)
 
         if self.parallel_output:
             return logits_parallel

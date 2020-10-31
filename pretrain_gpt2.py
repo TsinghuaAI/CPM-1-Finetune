@@ -32,7 +32,7 @@ from configure_data import configure_data
 from fp16 import FP16_Module
 from fp16 import FP16_Optimizer
 from learning_rates import AnnealingLR
-from model import GPT2Model
+from model import GPT2Model, QAGPT2Model
 from model import gpt2_get_params_for_weight_decay_optimization
 
 if USE_TORCH_DDP:
@@ -54,11 +54,11 @@ from gpt2_data_loader import make_gpt2_dataloaders
 from data.gpt2_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler
 
-def get_model(args):
+def get_model(args, model_cls):
     """Build the model."""
 
     print_rank_0('building GPT2 model ...')
-    model = GPT2Model(num_layers=args.num_layers,
+    model = model_cls(num_layers=args.num_layers,
                       vocab_size=args.vocab_size,
                       hidden_size=args.hidden_size,
                       num_attention_heads=args.num_attention_heads,
@@ -163,10 +163,10 @@ def get_learning_rate_scheduler(optimizer, args):
     return lr_scheduler
 
 
-def setup_model_and_optimizer(args):
+def setup_model_and_optimizer(args, model_cls=GPT2Model):
     """Setup model and optimizer."""
 
-    model = get_model(args)
+    model = get_model(args, model_cls)
     optimizer = get_optimizer(model, args)
     lr_scheduler = get_learning_rate_scheduler(optimizer, args)
 

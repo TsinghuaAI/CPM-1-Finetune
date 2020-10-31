@@ -26,13 +26,6 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, vocab_parallel_logits, target):
-        # Get the partition's vocab indecies
-        get_vocab_range = VocabUtility.vocab_range_from_per_partition_vocab_size
-        partition_vocab_size = vocab_parallel_logits.size()[-1]
-        rank = get_model_parallel_rank()
-        world_size = get_model_parallel_world_size()
-        vocab_start_index, vocab_end_index = get_vocab_range(
-            partition_vocab_size, rank, world_size)
 
         # Copy so the input remains unchanged.
         logits = vocab_parallel_logits.clone()
@@ -44,16 +37,19 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         # Subtract the maximum value.
         logits.sub_(logits_max.unsqueeze(dim=-1))
         # Sum of exponential of logits along vocab dimension across all GPUs.
-        if vocab_start_index > 2:
-            exp_logits = logits.exp() * 0.
-        else:
-            exp_logits = logits.exp()
-            exp_logits[:, :, 0] = 0.
-            exp_logits[:, :, 3:] = 0.
+        exp_logits = logits.exp()
         sum_exp_logits = exp_logits.sum(dim=-1)
         torch.distributed.all_reduce(sum_exp_logits,
                                      op=torch.distributed.ReduceOp.SUM,
                                      group=get_model_parallel_group())
+
+        # Get the partition's vocab indecies
+        get_vocab_range = VocabUtility.vocab_range_from_per_partition_vocab_size
+        partition_vocab_size = vocab_parallel_logits.size()[-1]
+        rank = get_model_parallel_rank()
+        world_size = get_model_parallel_world_size()
+        vocab_start_index, vocab_end_index = get_vocab_range(
+            5, rank, world_size)
 
         # Create a mask of valid vocab ids (1 means it needs to be masked).
         target_mask = (target < vocab_start_index) | (target >= vocab_end_index)
