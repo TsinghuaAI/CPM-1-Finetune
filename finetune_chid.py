@@ -233,51 +233,56 @@ def main():
 
     device = torch.cuda.current_device()
 
-    if torch.distributed.get_rank() == 0:
-        os.makedirs("results/", exist_ok=True)
+    results_dir = "results/"
 
-    with open("results/train_log-{}.txt".format(args.seed), "w") as f:
-        f.write("Train losses:\n")
+    cur_time = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+    model_dir = os.path.join(results_dir, "lm-zero-shot-{}".format(cur_time))
+
+    if torch.distributed.get_rank() == 0:
+        os.makedirs(model_dir, exist_ok=True)
+
+        with open(os.path.join(model_dir, "train_log.txt"), "w") as f:
+            f.write("Train losses:\n")
 
     total_loss = 0
     logging_loss = 0
     global_step = 0
     total_step = 0
     for e in range(epoch):
-        model.train()
-        for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
-            for k in batch:
-                batch[k] = batch[k].to(device)
-            for k in no_model_batch:
-                no_model_batch[k] = no_model_batch[k].to(device)
+        # model.train()
+        # for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
+        #     for k in batch:
+        #         batch[k] = batch[k].to(device)
+        #     for k in no_model_batch:
+        #         no_model_batch[k] = no_model_batch[k].to(device)
 
-            output = model(**batch)
-            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"])
-            loss_mask = no_model_batch["loss_mask"]
-            loss = torch.sum(losses * loss_mask, dim=-1) / loss_mask.sum(dim=-1)
-            loss = torch.mean(loss)
+        #     output = model(**batch)
+        #     losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"])
+        #     loss_mask = no_model_batch["loss_mask"]
+        #     loss = torch.sum(losses * loss_mask, dim=-1) / loss_mask.sum(dim=-1)
+        #     loss = torch.mean(loss)
 
-            # loss = loss / grad_acc
+        #     # loss = loss / grad_acc
 
-            model.backward(loss)
-            model.step()
+        #     model.backward(loss)
+        #     model.step()
 
-            torch.distributed.all_reduce(loss.data, group=mpu.get_data_parallel_group())
-            loss.data = loss.data / mpu.get_data_parallel_world_size()
-            total_loss += loss.item() / grad_acc
+        #     torch.distributed.all_reduce(loss.data, group=mpu.get_data_parallel_group())
+        #     loss.data = loss.data / mpu.get_data_parallel_world_size()
+        #     total_loss += loss.item() / grad_acc
 
-            if total_step % grad_acc == 0:
-                global_step += 1
-                if global_step != 0 and global_step % args.log_interval == 0:
-                    if torch.distributed.get_rank() == 0:
-                        train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
-                        yprint(train_log)
-                        with open("results/train_log_no_cls-{}.txt".format(args.seed), "a") as f:
-                            f.write(train_log + "\n")
+        #     if total_step % grad_acc == 0:
+        #         global_step += 1
+        #         if global_step != 0 and global_step % args.log_interval == 0:
+        #             if torch.distributed.get_rank() == 0:
+        #                 train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
+        #                 yprint(train_log)
+        #                 with open(os.path.join(model_dir, "train_log.txt"), "a") as f:
+        #                     f.write(train_log + "\n")
                         
-                    logging_loss = total_loss
+        #             logging_loss = total_loss
                     
-            total_step += 1
+        #     total_step += 1
 
         model.eval()
         all_sids = []
@@ -323,10 +328,15 @@ def main():
             preds = [min(p, key=lambda x: x[1])[0] for p in preds if len(p) > 0]
 
             yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels)))
-            results_dir = "results/eval_e{}".format(e)
-            os.makedirs(results_dir, exist_ok=True)
-            with open(os.path.join(results_dir, "eval_result.txt"), "w") as f:
+            eval_results_dir = os.path.join(model_dir, "eval_e{}".format(e))
+            os.makedirs(eval_results_dir, exist_ok=True)
+            with open(os.path.join(eval_results_dir, "eval_result.txt"), "w") as f:
                 f.write("Acc: {}\n".format(sum([int(p == l) for p, l in zip(preds, truth_labels)]) / len(truth_labels)))
+
+            with open(os.path.join(eval_results_dir, "pred.txt"), "w") as f:
+                f.write(str(preds))
+            with open(os.path.join(eval_results_dir, "truth.txt"), "w") as f:
+                f.write(str(truth_labels))
 
         torch.distributed.barrier()
         if args.save:

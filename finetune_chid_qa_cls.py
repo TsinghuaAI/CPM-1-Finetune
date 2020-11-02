@@ -212,7 +212,7 @@ def main():
     results_dir = "results/"
 
     cur_time = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-    model_dir = os.path.join(results_dir, "qa-cls-{}".format(cur_time))
+    model_dir = os.path.join(results_dir, "qa-cls-train-eval-{}".format(cur_time))
 
     if torch.distributed.get_rank() == 0:
         os.makedirs(model_dir, exist_ok=True)
@@ -270,15 +270,14 @@ def main():
             tensor_list_truth = [torch.zeros_like(no_model_batch["truth"]) for _ in range(mpu.get_data_parallel_world_size())]
             torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
-            rank = torch.distributed.get_rank()
             tmp_scores = torch.stack(tensor_list, 0).view(-1, 5)
 
             tensor_list_model = [torch.zeros_like(tmp_scores) for _ in range(mpu.get_model_parallel_world_size())]
             torch.distributed.all_gather(tensor_list_model, tmp_scores, mpu.get_model_parallel_group())
             if torch.distributed.get_rank() == 0:
                 scores = torch.cat(tensor_list_model, -1)
-
                 truth = torch.stack(tensor_list_truth, 0).view(-1)
+
                 preds = torch.argmax(scores, dim=-1)
 
                 trn_all_truth.extend(truth.detach().cpu().tolist())
@@ -308,7 +307,7 @@ def main():
         all_truth = []
         all_preds = []
         with torch.no_grad():
-            for batch, no_model_batch in tqdm(dev_dataloader, desc="Evaluating"):
+            for batch, no_model_batch in tqdm(train_dataloader, desc="Evaluating"):
                 for k in batch:
                     batch[k] = batch[k].to(device)
                 for k in no_model_batch:
@@ -323,9 +322,21 @@ def main():
                 tensor_list_truth = [torch.zeros_like(no_model_batch["truth"], dtype=torch.long) for _ in range(mpu.get_data_parallel_world_size())]
                 torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
+                tensor_list_input_ids = [torch.zeros_like(batch["input_ids"], dtype=torch.long) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(tensor_list_input_ids, batch["input_ids"], mpu.get_data_parallel_group())
+
                 if torch.distributed.get_rank() == 0:
                     scores = torch.stack(tensor_list, 0).view(-1, 10) # for convience, the truth labels only appears in the first part of the model
                     truth = torch.stack(tensor_list_truth, 0).view(-1)
+
+                    input_ids = torch.stack(tensor_list_input_ids, 0).view(-1, batch["input_ids"].size(-1))
+
+                    for ids, t in zip(input_ids, truth):
+                        ids = ids.detach().cpu().tolist()
+                        t = t.detach().cpu().tolist()
+
+                        # print(tokenizer.decode(ids))
+                        # print(t)
 
                     preds = torch.argmax(scores, dim=-1)
 
@@ -347,6 +358,7 @@ def main():
             torch.distributed.barrier()
         
         if args.save:
+            args.save = os.path.join(model_dir, "eval_e{}".format(e))
             save_checkpoint(global_step, model, optimizer, lr_scheduler, args)
 
 if __name__ == "__main__":
