@@ -217,7 +217,7 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 1)
+    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed', 'train', tokenizer, 0.1)
     dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed', 'dev', tokenizer, 1)
 
     with open("scripts/ds_finetune.json", "r") as f:
@@ -249,40 +249,40 @@ def main():
     global_step = 0
     total_step = 0
     for e in range(epoch):
-        # model.train()
-        # for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
-        #     for k in batch:
-        #         batch[k] = batch[k].to(device)
-        #     for k in no_model_batch:
-        #         no_model_batch[k] = no_model_batch[k].to(device)
+        model.train()
+        for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
+            for k in batch:
+                batch[k] = batch[k].to(device)
+            for k in no_model_batch:
+                no_model_batch[k] = no_model_batch[k].to(device)
 
-        #     output = model(**batch)
-        #     losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"])
-        #     loss_mask = no_model_batch["loss_mask"]
-        #     loss = torch.sum(losses * loss_mask, dim=-1) / loss_mask.sum(dim=-1)
-        #     loss = torch.mean(loss)
+            output = model(**batch)
+            losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), no_model_batch["labels"])
+            loss_mask = no_model_batch["loss_mask"]
+            loss = torch.sum(losses * loss_mask, dim=-1) / loss_mask.sum(dim=-1)
+            loss = torch.mean(loss)
 
-        #     # loss = loss / grad_acc
+            # loss = loss / grad_acc
 
-        #     model.backward(loss)
-        #     model.step()
+            model.backward(loss)
+            model.step()
 
-        #     torch.distributed.all_reduce(loss.data, group=mpu.get_data_parallel_group())
-        #     loss.data = loss.data / mpu.get_data_parallel_world_size()
-        #     total_loss += loss.item() / grad_acc
+            torch.distributed.all_reduce(loss.data, group=mpu.get_data_parallel_group())
+            loss.data = loss.data / mpu.get_data_parallel_world_size()
+            total_loss += loss.item() / grad_acc
 
-        #     if total_step % grad_acc == 0:
-        #         global_step += 1
-        #         if global_step != 0 and global_step % args.log_interval == 0:
-        #             if torch.distributed.get_rank() == 0:
-        #                 train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
-        #                 yprint(train_log)
-        #                 with open(os.path.join(model_dir, "train_log.txt"), "a") as f:
-        #                     f.write(train_log + "\n")
+            if total_step % grad_acc == 0:
+                global_step += 1
+                if global_step != 0 and global_step % args.log_interval == 0:
+                    if torch.distributed.get_rank() == 0:
+                        train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
+                        yprint(train_log)
+                        with open(os.path.join(model_dir, "train_log.txt"), "a") as f:
+                            f.write(train_log + "\n")
                         
-        #             logging_loss = total_loss
+                    logging_loss = total_loss
                     
-        #     total_step += 1
+            total_step += 1
 
         model.eval()
         all_sids = []
