@@ -1,6 +1,7 @@
 import json
 import re
 import os
+import random
 from tqdm import tqdm
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
 
@@ -15,21 +16,32 @@ def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
             break
         
         cands_ids = []
+        cands_poses = []
+        s, e = 0, 0
         for i, cand in enumerate(cands):
-            cands_ids.extend(tokenizer.encode(cand.strip()))
-            cands_ids.append(tokenizer.encoder["<sep>"])
+            # tmp = tokenizer.encode(cand.strip()) + [tokenizer.encoder["<sep>"]]
+            tmp = [tokenizer.encoder["<sep>"]]
+            e += len(tmp)
+            cands_poses.append((s, e))
+            s = e
+            cands_ids.extend(tmp)
 
         prefix = re.sub(pattern, "", sent[:m.start()])
         postfix = re.sub(pattern, "", sent[m.end():])
 
-        context_ids = tokenizer.encode(prefix.strip()) + [tokenizer.encoder["<mask>"]] + tokenizer.encode(postfix.strip()) + [tokenizer.encoder["<eod>"]]
+        # ids = cands_ids + tokenizer.encode(prefix.strip()) + [tokenizer.encoder["<mask>"]]
+        ids = cands_ids
 
-        ids = cands_ids + context_ids
+        mask_pos = len(ids) - 1
+
+        ids = ids + tokenizer.encode(postfix.strip())[-20:] + [tokenizer.encoder["<eod>"]]
 
         L.append({
             "sent": ids,
             "truth": answers[m.group()],
             "cands_len": len(cands_ids),
+            "mask_pos": mask_pos,
+            "cands_poses": cands_ids
         })
 
         start = m.end()
@@ -57,7 +69,7 @@ if __name__ == "__main__":
     data_dir = "/data/gyx/chid/"
     ans_data_dir = "/data/gyx/chid/"
 
-    preprocesed_dir = "/data/gyx/chid/preprocessed_qa_cls_1000/"
+    preprocesed_dir = "/data/gyx/chid/preprocessed_qa_cls_1000_not_too_naive/"
 
     tokenizer_path = "/mnt/nfs/home/gyx/bpe/bpe_3w"
 

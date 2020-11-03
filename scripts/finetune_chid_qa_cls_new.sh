@@ -17,7 +17,7 @@ script_path=$(realpath $0)
 script_dir=$(dirname $script_path)
 config_json="$script_dir/ds_finetune.json"
 
-python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 finetune_chid_qa.py \
+python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 finetune_chid_qa_cls_new.py \
        --model-parallel-size $MPSIZE \
        --num-layers $NLAYERS \
        --hidden-size $NHIDDEN \

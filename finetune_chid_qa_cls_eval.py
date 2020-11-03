@@ -42,7 +42,7 @@ import time
 
 from tqdm import tqdm
 from fp16 import FP16_Module
-from model import GPT2Model
+from model import QAGPT2Model
 from model import DistributedDataParallel as DDP
 from utils import print_rank_0
 from data.samplers import DistributedBatchSampler, RandomSampler
@@ -78,18 +78,17 @@ class CHIDDataset(torch.utils.data.Dataset):
         ints = []
         sizes = []
         for d in tqdm(data[:int(self.ratio * len(data))]):
-            loss_mask = [0] * (len(d["sent"]) - 2) + [1]
+            loss_mask = [0] * (len(d["sent"]) - 1) + [1]
 
             seq.append({
-                "input_ids": d["sent"][:-1],
+                "input_ids": d["sent"],
             })
             ints.append({
                 "loss_mask": loss_mask,
-                "labels": d["sent"][1:],
                 "truth": d["truth"],
-                "full_attn_range": d["cands_len"]
+                "full_attn_len": d["cands_len"]
             })
-            sizes.append(len(d["sent"]) - 1)
+            sizes.append(len(d["sent"]))
 
         return seq, ints, sizes
 
@@ -107,10 +106,9 @@ class CHIDDataset(torch.utils.data.Dataset):
         # max_size = max(sizes)
         max_size = self.max_size
 
-        attn_mask = torch.tril(torch.ones((max_size, max_size))).unsqueeze(0)
-        # for i, x in enumerate(ints):
-        #     s, e = x["full_attn_range"]
-        #     attn_mask[i, s:e, :e] = torch.ones(e-s, e)
+        attn_mask = torch.tril(torch.ones((bs, max_size, max_size)))
+        for i, x in enumerate(ints):
+            attn_mask[i, :, :x["full_attn_len"]] = torch.ones(max_size, x["full_attn_len"])
         position_ids = torch.arange(max_size, dtype=torch.long).unsqueeze(0).repeat(bs, 1)
 
         if self.args.fp16:
@@ -123,7 +121,6 @@ class CHIDDataset(torch.utils.data.Dataset):
         }
 
         no_model_seq = {
-            "labels": torch.ones(bs, max_size).long() * self.pad_id,
             "truth": torch.zeros(bs).long(),
             "loss_mask": torch.zeros(bs, max_size).float()
         }
@@ -131,7 +128,6 @@ class CHIDDataset(torch.utils.data.Dataset):
         for i, samp in enumerate(seq):
             batch_seq["input_ids"][i, :len(samp["input_ids"])] = torch.tensor(samp["input_ids"])
         for i, samp in enumerate(ints):
-            no_model_seq["labels"][i, :len(samp["labels"])] = torch.tensor(samp["labels"])
             no_model_seq["truth"][i] = torch.tensor(samp["truth"])
             no_model_seq["loss_mask"][i, :len(samp["loss_mask"])] = torch.tensor(samp["loss_mask"])
 
@@ -196,8 +192,8 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed_qa_cands_end', 'train', tokenizer, 1)
-    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed_qa_cands_end', 'dev', tokenizer, 1)
+    train_dataloader, _ = load_data('/data/gyx/chid/preprocessed_qa_cls_1000_not_too_naive', 'train', tokenizer, 1)
+    dev_dataloader, dev_dataset = load_data('/data/gyx/chid/preprocessed_qa_cls_1000_2', 'dev', tokenizer, 1)
 
 
     with open("scripts/ds_finetune.json", "r") as f:
@@ -209,14 +205,14 @@ def main():
 
     # Model, optimizer, and learning rate.
     # TODO: maybe need to reinitialize optimizer
-    model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
+    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, model_cls=QAGPT2Model)
 
     device = torch.cuda.current_device()
 
     results_dir = "results/"
 
     cur_time = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-    model_dir = os.path.join(results_dir, "qa-{}".format(cur_time))
+    model_dir = os.path.join(results_dir, "qa-cls-train-eval-{}".format(cur_time))
 
     if torch.distributed.get_rank() == 0:
         os.makedirs(model_dir, exist_ok=True)
@@ -234,85 +230,85 @@ def main():
     trn_all_truth = []
     trn_all_preds = []
     for e in range(epoch):
-        model.train()
-        for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
-            for k in batch:
-                batch[k] = batch[k].to(device)
-            for k in no_model_batch:
-                no_model_batch[k] = no_model_batch[k].to(device)
+        # model.train()
+        # for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
+        #     for k in batch:
+        #         batch[k] = batch[k].to(device)
+        #     for k in no_model_batch:
+        #         no_model_batch[k] = no_model_batch[k].to(device)
             
-            # if torch.distributed.get_rank() == 0:
-            #     print(batch["input_ids"][0].detach().cpu().tolist())
-            #     print(tokenizer.decode(batch["input_ids"][0].detach().cpu().tolist()))
-            #     print(tokenizer.decode(no_model_batch["labels"][0].detach().cpu().tolist()))
+        #     # if torch.distributed.get_rank() == 0:
+        #     #     print(batch["input_ids"][0].detach().cpu().tolist())
+        #     #     print(tokenizer.decode(batch["input_ids"][0].detach().cpu().tolist()))
+        #     #     print(tokenizer.decode(no_model_batch["labels"][0].detach().cpu().tolist()))
 
-            # if torch.distributed.get_rank() == 0:
-            #     print(batch["input_ids"][0])
-            #     print(no_model_batch["labels"][0])
-            #     print(tokenizer.decode(batch["input_ids"][0].detach().cpu().tolist()))
-            #     print(tokenizer.decode(no_model_batch["labels"][0].detach().cpu().tolist()))
-            #     print(batch["attention_mask"][0, 0, -15:-10, -20:].detach().cpu().tolist())
-            #     print(batch["attention_mask"].size())
-            #     print(no_model_batch["truth"][0])
-            #     print(no_model_batch["loss_mask"][0])
+        #     output = model(**batch)
+        #     output = torch.sum(output * no_model_batch["loss_mask"].unsqueeze(-1), 1) / torch.sum(no_model_batch["loss_mask"], -1).unsqueeze(-1)
+        #     truths = no_model_batch["truth"]
+        #     losses = mpu.vocab_parallel_cross_entropy(output.unsqueeze(1).contiguous().float(), truths.unsqueeze(1))
 
-            # exit(0)
+        #     # if torch.distributed.get_rank() == 0:
+        #     #     print(batch["input_ids"][0])
+        #     #     print(tokenizer.decode(batch["input_ids"][0].detach().cpu().tolist()))
+        #     #     test = torch.sum(batch["input_ids"] * no_model_batch["loss_mask"], 1) / torch.sum(no_model_batch["loss_mask"], 1)
+        #     #     print(test.long())
+        #     # exit(0)
 
-            output = model(**batch)
-            output = torch.sum(output * no_model_batch["loss_mask"].unsqueeze(-1), 1) / torch.sum(no_model_batch["loss_mask"], -1).unsqueeze(-1)
-            labels = (torch.sum(no_model_batch["labels"] * no_model_batch["loss_mask"], 1) / torch.sum(no_model_batch["loss_mask"], -1)).long()
-            losses = mpu.vocab_parallel_cross_entropy(output.unsqueeze(1).contiguous().float(), labels.unsqueeze(1))
-            loss = torch.mean(losses)
+        #     loss = torch.mean(losses)
 
-            model.backward(loss)
-            model.step()
+        #     model.backward(loss)
+        #     model.step()
 
-            torch.distributed.all_reduce(loss.data, group=mpu.get_data_parallel_group())
-            loss.data = loss.data / mpu.get_data_parallel_world_size()
-            total_loss += loss.item() / grad_acc
+        #     torch.distributed.all_reduce(loss.data, group=mpu.get_data_parallel_group())
+        #     loss.data = loss.data / mpu.get_data_parallel_world_size()
+        #     total_loss += loss.item() / grad_acc
 
 
-            tensor_list = [torch.zeros_like(output) for _ in range(mpu.get_data_parallel_world_size())]
-            torch.distributed.all_gather(tensor_list, output, mpu.get_data_parallel_group())
+        #     tensor_list = [torch.zeros_like(output) for _ in range(mpu.get_data_parallel_world_size())]
+        #     torch.distributed.all_gather(tensor_list, output, mpu.get_data_parallel_group())
 
-            tensor_list_truth = [torch.zeros_like(no_model_batch["truth"]) for _ in range(mpu.get_data_parallel_world_size())]
-            torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
+        #     tensor_list_truth = [torch.zeros_like(no_model_batch["truth"]) for _ in range(mpu.get_data_parallel_world_size())]
+        #     torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
-            if torch.distributed.get_rank() == 0:
-                scores = torch.stack(tensor_list, 0).view(-1, 15000) # for convience, the truth labels only appear in the first part of the model
-                truth = torch.stack(tensor_list_truth, 0).view(-1)
-                scores = scores[:, num_ids]
+        #     rank = torch.distributed.get_rank()
+        #     tmp_scores = torch.stack(tensor_list, 0).view(-1, 5)
 
-                preds = torch.argmax(scores, dim=-1)
+        #     tensor_list_model = [torch.zeros_like(tmp_scores) for _ in range(mpu.get_model_parallel_world_size())]
+        #     torch.distributed.all_gather(tensor_list_model, tmp_scores, mpu.get_model_parallel_group())
+        #     if torch.distributed.get_rank() == 0:
+        #         scores = torch.cat(tensor_list_model, -1)
 
-                trn_all_truth.extend(truth.detach().cpu().tolist())
-                trn_all_preds.extend(preds.detach().cpu().tolist())
+        #         truth = torch.stack(tensor_list_truth, 0).view(-1)
+        #         preds = torch.argmax(scores, dim=-1)
+
+        #         trn_all_truth.extend(truth.detach().cpu().tolist())
+        #         trn_all_preds.extend(preds.detach().cpu().tolist())
 
 
-            if total_step % grad_acc == 0:
-                global_step += 1
-                if global_step != 0 and global_step % args.log_interval == 0:
-                    if torch.distributed.get_rank() == 0:
-                        train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
-                        yprint(train_log)
-                        with open(os.path.join(model_dir, "train_log.txt"), "a") as f:
-                            f.write(train_log + "\n")
+        #     if total_step % grad_acc == 0:
+        #         global_step += 1
+        #         if global_step != 0 and global_step % args.log_interval == 0:
+        #             if torch.distributed.get_rank() == 0:
+        #                 train_log = "epoch {}, global step {}, total step {}, train lm loss: {}".format(e, global_step, epoch * len(train_dataloader), (total_loss - logging_loss) / args.log_interval)
+        #                 yprint(train_log)
+        #                 with open(os.path.join(model_dir, "train_log.txt"), "a") as f:
+        #                     f.write(train_log + "\n")
                         
-                        yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(trn_all_preds, trn_all_truth)]) / len(trn_all_truth)))
+        #                 yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(trn_all_preds, trn_all_truth)]) / len(trn_all_truth)))
                         
-                        trn_all_preds = []
-                        trn_all_truth = []
+        #                 trn_all_preds = []
+        #                 trn_all_truth = []
 
-                    logging_loss = total_loss
+        #             logging_loss = total_loss
 
                     
-            total_step += 1
+        #     total_step += 1
 
         model.eval()
         all_truth = []
         all_preds = []
         with torch.no_grad():
-            for batch, no_model_batch in tqdm(dev_dataloader, desc="Evaluating"):
+            for batch, no_model_batch in tqdm(train_dataloader, desc="Evaluating"):
                 for k in batch:
                     batch[k] = batch[k].to(device)
                 for k in no_model_batch:
@@ -327,10 +323,14 @@ def main():
                 tensor_list_truth = [torch.zeros_like(no_model_batch["truth"], dtype=torch.long) for _ in range(mpu.get_data_parallel_world_size())]
                 torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
+                tmp_scores = torch.stack(tensor_list, 0).view(-1, 5)
+
+                tensor_list_model = [torch.zeros_like(tmp_scores) for _ in range(mpu.get_model_parallel_world_size())]
+                torch.distributed.all_gather(tensor_list_model, tmp_scores, mpu.get_model_parallel_group())
+
                 if torch.distributed.get_rank() == 0:
-                    scores = torch.stack(tensor_list, 0).view(-1, 15000) # for convience, the truth labels only appears in the first part of the model
+                    scores = torch.cat(tensor_list_model, -1)
                     truth = torch.stack(tensor_list_truth, 0).view(-1)
-                    scores = scores[:, num_ids]
 
                     preds = torch.argmax(scores, dim=-1)
 
@@ -352,6 +352,7 @@ def main():
             torch.distributed.barrier()
         
         if args.save:
+            args.save = os.path.join(model_dir, "eval_e{}".format(e))
             save_checkpoint(global_step, model, optimizer, lr_scheduler, args)
 
 if __name__ == "__main__":

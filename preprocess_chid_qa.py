@@ -27,12 +27,12 @@ def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
 
         ques_ids = [tokenizer.encoder["<mask>"]] + tokenizer.encode("答案是:") + [num_ids[answers[m.group()]]]
         
-        ids = cands_ids + context_ids + ques_ids
+        ids = context_ids + cands_ids + ques_ids
 
         L.append({
             "sent": ids,
             "truth": answers[m.group()],
-            "cands_len": len(cands_ids),
+            "cands_len": (len(context_ids), len(context_ids) + len(cands_ids)),
         })
 
         start = m.end()
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     data_dir = "/data/gyx/chid/"
     ans_data_dir = "/data/gyx/chid/"
 
-    preprocesed_dir = "/data/gyx/chid/preprocessed_qa/"
+    preprocesed_dir = "/data/gyx/chid/preprocessed_qa_cands_end/"
 
     tokenizer_path = "/mnt/nfs/home/gyx/bpe/bpe_3w"
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     for split in ["train", "dev"]:
         with open(os.path.join(data_dir, "{}.json".format(split)), "r") as f:
-            lines = f.readlines()[:3000]
+            lines = f.readlines()
 
         with open(os.path.join(ans_data_dir, "{}_answer.json".format(split)), "r") as f:
             ans_d = json.load(f)

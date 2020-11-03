@@ -130,6 +130,8 @@ def add_training_args(parser):
     group.add_argument('--reset-attention-mask', action='store_true',
                        help='Reset self attention maske after '
                        'end-of-document token.')
+    group.add_argument('--do_train', action='store_true')
+    group.add_argument('--alpha', default=1, type=float)
 
     # Learning rate.
     group.add_argument('--lr-decay-iters', type=int, default=None,
