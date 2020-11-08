@@ -155,7 +155,8 @@ class CHIDDataset(torch.utils.data.Dataset):
             no_model_seq["labels"][i, :len(samp["labels"])] = torch.tensor(samp["labels"])
             no_model_seq["sids"][i] = torch.tensor(samp["sid"])
             no_model_seq["cids"][i] = torch.tensor(samp["cid"])
-            no_model_seq["bias_score"][i] = torch.tensor(samp["bias_score"])
+            if self.split == "dev":
+                no_model_seq["bias_score"][i] = torch.tensor(samp["bias_score"])
 
         return batch_seq, no_model_seq
 
@@ -410,7 +411,7 @@ def main():
     idiom_scores = get_idiom_score(tokenizer, data_path, model, device)
 
     # load data
-    train_dataloader, _ = load_data(data_path, 'train', tokenizer, idiom_scores, 0.1)
+    train_dataloader, _ = load_data(data_path, 'train', tokenizer, idiom_scores, 1)
     dev_dataloader, dev_dataset = load_data(data_path, 'dev', tokenizer, idiom_scores, 1)
     args.train_iters = len(train_dataloader) * epoch / grad_acc
 

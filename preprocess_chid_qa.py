@@ -1,8 +1,11 @@
 import json
 import re
 import os
+import random
 from tqdm import tqdm
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
+
+random.seed(981217)
 
 def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
     pattern = re.compile(r"#idiom\d+#")
@@ -16,9 +19,11 @@ def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
         
         cands_ids = []
         for i, cand in enumerate(cands):
-            cands_ids.extend(tokenizer.encode("选项{}:".format(i)))
-            cands_ids.extend(tokenizer.encode(cand.strip()))
-            cands_ids.append(tokenizer.encoder["<sep>"])
+            tmp = tokenizer.encode("选项{}:".format(i)) + tokenizer.encode(cand.strip()) + [tokenizer.encoder["<sep>"]]
+            cands_ids.append(tmp)
+        
+        random.shuffle(cands_ids)
+        cands_ids = [x for y in cands_ids for x in y]
 
         prefix = re.sub(pattern, "", sent[:m.start()])
         postfix = re.sub(pattern, "", sent[m.end():])
@@ -60,7 +65,7 @@ if __name__ == "__main__":
     data_dir = "/data/gyx/chid/"
     ans_data_dir = "/data/gyx/chid/"
 
-    preprocesed_dir = "/data/gyx/chid/preprocessed_qa_cands_end/"
+    preprocesed_dir = "/data/gyx/chid/preprocessed_qa_cands_end_shuffle/"
 
     tokenizer_path = "/mnt/nfs/home/gyx/bpe/bpe_3w"
 

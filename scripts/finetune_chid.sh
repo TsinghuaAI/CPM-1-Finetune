@@ -36,10 +36,11 @@ python3 -m torch.distributed.launch --master_port 1235 --nproc_per_node 4 finetu
        --vocab-size 30000 \
        --lr 0.0001 \
        --warmup 0.05 \
-       --batch-size 16 \
+       --batch-size 2 \
        --deepspeed \
        --deepspeed_config ${config_json} \
        --log-interval 10 \
        --seed 23333 \
-       --alpha 0
+       --alpha 0 \
+       --do_train
        # --save results/
