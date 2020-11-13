@@ -176,6 +176,8 @@ def add_training_args(parser):
     group.add_argument('--local_rank', type=int, default=None,
                        help='local rank passed from distributed launcher')
 
+    group.add_argument('--model_name', type=str)
+
     return parser
 
 

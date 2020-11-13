@@ -44,7 +44,7 @@ with open(os.path.join(idiom_data_dir, "idiomDict.json"), "r") as f:
 idioms = list(idiom_d.keys())
 idiom2id = {x: i for i, x in enumerate(idioms)}
 
-for split in ["train", "dev"]:
+for split in ["test"]:
     with open(os.path.join(data_dir, "{}.json".format(split)), "r") as f:
         lines = f.readlines()
 

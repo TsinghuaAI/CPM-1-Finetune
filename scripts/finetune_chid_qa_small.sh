@@ -1,10 +1,10 @@
 #!/bin/bash
 
-CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/3B-new-bpe-fat"
-MPSIZE=2
-NLAYERS=32
-NHIDDEN=2560
-NATT=32
+CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-small"
+MPSIZE=1
+NLAYERS=12
+NHIDDEN=768
+NATT=12
 MAXSEQLEN=1024
 
 #SAMPLING ARGS
@@ -15,9 +15,9 @@ TOPP=0
 
 script_path=$(realpath $0)
 script_dir=$(dirname $script_path)
-config_json="$script_dir/ds_finetune.json"
+config_json="$script_dir/ds_finetune_small.json"
 
-python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 finetune_chid_qa.py \
+python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 finetune_chid_qa_single.py \
        --model-parallel-size $MPSIZE \
        --num-layers $NLAYERS \
        --hidden-size $NHIDDEN \
@@ -34,12 +34,13 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --top_p $TOPP \
        --tokenizer-path ~/bpe/bpe_3w/ \
        --vocab-size 30000 \
-       --lr 0.00001 \
+       --lr 0.000005 \
        --warmup 0.1 \
-       --batch-size 2 \
+       --batch-size 16 \
        --deepspeed \
        --deepspeed_config ${config_json} \
        --log-interval 10 \
        --eval-interval 1000 \
        --seed 23333 \
        --save results/ \
+       --model_name qa-end-small \

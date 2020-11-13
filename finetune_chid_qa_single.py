@@ -233,8 +233,8 @@ def main():
     logging_loss = 0
     global_step = 0
     total_step = 0
-    trn_all_truth = []
-    trn_all_preds = []
+    # trn_all_truth = []
+    # trn_all_preds = []
     for e in range(epoch):
         model.train()
         for batch, no_model_batch in tqdm(train_dataloader, disable=torch.distributed.get_rank() != 0):
@@ -265,10 +265,10 @@ def main():
                         with open(os.path.join(model_dir, "train_log.txt"), "a") as f:
                             f.write(train_log + "\n")
                         
-                        yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(trn_all_preds, trn_all_truth)]) / len(trn_all_truth)))
+                        # yprint("Acc: {}".format(sum([int(p == l) for p, l in zip(trn_all_preds, trn_all_truth)]) / len(trn_all_truth)))
                         
-                        trn_all_preds = []
-                        trn_all_truth = []
+                        # trn_all_preds = []
+                        # trn_all_truth = []
 
                     logging_loss = total_loss
    
@@ -293,7 +293,7 @@ def main():
                             torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
                             if torch.distributed.get_rank() == 0:
-                                scores = torch.stack(tensor_list, 0).view(-1, 15000) # for convience, the truth labels only appears in the first part of the model
+                                scores = torch.stack(tensor_list, 0).view(-1, 30000) # for convience, the truth labels only appears in the first part of the model
                                 truth = torch.stack(tensor_list_truth, 0).view(-1)
                                 scores = scores[:, num_ids]
 

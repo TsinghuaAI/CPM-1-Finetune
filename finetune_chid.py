@@ -96,7 +96,7 @@ class CHIDDataset(torch.utils.data.Dataset):
         sizes = []
         seq = []
         for content, sid, cid in zip(tqdm(contents[:int(self.ratio * len(contents))], desc="Processing"), sids, cids):
-            if self.split == "dev":
+            if self.split == "dev" or self.split == "test":
                 content, bias = content
             input_ids = self.tokenizer.encode(content)
             input_ids = input_ids + [self.eod_token]
@@ -110,7 +110,7 @@ class CHIDDataset(torch.utils.data.Dataset):
                 "labels": input_ids[1:]
             })
 
-            if self.split == "dev":
+            if self.split == "dev" or self.split == "test":
                 seq[-1].update({
                     "bias_score": self.idiom_score[bias],
                 })
@@ -155,7 +155,7 @@ class CHIDDataset(torch.utils.data.Dataset):
             no_model_seq["labels"][i, :len(samp["labels"])] = torch.tensor(samp["labels"])
             no_model_seq["sids"][i] = torch.tensor(samp["sid"])
             no_model_seq["cids"][i] = torch.tensor(samp["cid"])
-            if self.split == "dev":
+            if self.split == "dev" or self.split == "test":
                 no_model_seq["bias_score"][i] = torch.tensor(samp["bias_score"])
 
         return batch_seq, no_model_seq
@@ -412,7 +412,7 @@ def main():
 
     # load data
     train_dataloader, _ = load_data(data_path, 'train', tokenizer, idiom_scores, 1)
-    dev_dataloader, dev_dataset = load_data(data_path, 'dev', tokenizer, idiom_scores, 1)
+    dev_dataloader, dev_dataset = load_data(data_path, 'test', tokenizer, idiom_scores, 1)
     args.train_iters = len(train_dataloader) * epoch / grad_acc
 
     total_loss = 0
