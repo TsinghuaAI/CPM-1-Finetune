@@ -1,1 +1,0 @@
-rsync -avzP ./* cgpt${1-10}:~/gpt-finetune/
