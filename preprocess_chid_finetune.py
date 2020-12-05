@@ -38,7 +38,6 @@ def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
         L.append({
             "sent": ids,
             "truth": answers[m.group()],
-            "cands_len": (len(context_ids), len(context_ids) + len(cands_ids)),
         })
 
         start = m.end()

@@ -3,7 +3,7 @@
 DATA_DIR="/data/gyx/chid/preprocessed_zeroshot"
 CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-small"
 RESULTS_DIR="results"
-MODEL_NAME="finetune-test"
+MODEL_NAME="zeroshot-test"
 TOKENIZER_PATH="/mnt/nfs/home/gyx/bpe/bpe_3w/"
 MPSIZE=1
 NLAYERS=12
