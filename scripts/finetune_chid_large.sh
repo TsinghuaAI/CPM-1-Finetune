@@ -15,6 +15,7 @@ CUR_DIR=$(dirname ${CUR_PATH})
 DS_CONFIG="${CUR_DIR}/ds_finetune_large.json"
 
 python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 finetune_chid.py \
+       --do_train \
        --do_eval \
        --data_dir ${DATA_DIR} \
        --model-parallel-size ${MPSIZE} \
@@ -40,4 +41,3 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \
        --epoch 1 \
-       --eval_ckpt_path "/mnt/nfs/home/gyx/gpt-finetune/results/finetune-test-2020-12-05-10:23:22/dev_step-3"

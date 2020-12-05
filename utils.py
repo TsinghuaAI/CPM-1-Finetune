@@ -322,7 +322,6 @@ def load_checkpoint(model, optimizer, lr_scheduler, args):
                             'state.'.format(checkpoint_name))
                 exit()
 
-    print("OKOK")
     # Iterations.
     if args.finetune or release:
         iteration = 0
