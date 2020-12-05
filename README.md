@@ -4,6 +4,8 @@
 
 同时，该仓库也提供了 ChID 数据集 zero-shot setting 下测试代码。
 
+
+
 ## 1 Fine-Tune
 
 ### 1.1 数据预处理
@@ -41,6 +43,8 @@ RESULTS_DIR # 训练结果的存放处
 MODEL_NAME # 给模型起的名字
 TOKENIZER_PATH # tokenizer 的路径
 ```
+
+
 
 ## 2 Zero-Shot
 
@@ -102,3 +106,14 @@ RESULTS_DIR # 训练结果的存放处
 MODEL_NAME # 给模型起的名字
 TOKENIZER_PATH # tokenizer 的路径
 ```
+
+
+
+### 3 参考性能
+
+|            | Fine-Tune | Zero-Shot |
+| ---------- | --------- | --------- |
+| CPM-small  | 0.657     | 0.433     |
+| CPM-medium | 0.695     | 0.524     |
+| CPM-large  | **0.804** | **0.685** |
+
