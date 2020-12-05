@@ -67,7 +67,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument("--data_dir", default=None, type=str, help="The input dir of original ChID data.")
-    parser.add_argument("--output_dir", type=str, help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument("--tokenizer_path", type=str, help="The tokenizer path.")
     parser.add_argument("--output_dir", type=str, help="The processed data output dir.")
 

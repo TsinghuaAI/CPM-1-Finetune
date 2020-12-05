@@ -1,45 +1,37 @@
 #!/bin/bash
 
+DATA_DIR="/data/gyx/chid/preprocessed_zeroshot"
 CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-medium"
+RESULTS_DIR="results"
+MODEL_NAME="finetune-test"
+TOKENIZER_PATH="/mnt/nfs/home/gyx/bpe/bpe_3w/"
 MPSIZE=1
 NLAYERS=24
 NHIDDEN=1024
 NATT=16
 MAXSEQLEN=1024
 
-#SAMPLING ARGS
-TEMP=0.9
-#If TOPK/TOPP are 0 it defaults to greedy sampling, top-k will also override top-p
-TOPK=0
-TOPP=0
+CUR_PATH=$(realpath $0)
+CUR_DIR=$(dirname ${CUR_PATH})
+DS_CONFIG="${CUR_DIR}/ds_finetune_medium.json"
 
-script_path=$(realpath $0)
-script_dir=$(dirname $script_path)
-config_json="$script_dir/ds_finetune.json"
-
-python3 -m torch.distributed.launch --master_port 1235 --nproc_per_node 4 finetune_chid.py \
-       --model-parallel-size $MPSIZE \
-       --num-layers $NLAYERS \
-       --hidden-size $NHIDDEN \
-       --load $CHECKPOINT_PATH \
-       --num-attention-heads $NATT \
-       --seq-length $MAXSEQLEN \
+python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 zero-shot_chid.py \
+       --data_dir ${DATA_DIR} \
+       --model-parallel-size ${MPSIZE} \
+       --num-layers ${NLAYERS} \
+       --hidden-size ${NHIDDEN} \
+       --load ${CHECKPOINT_PATH} \
+       --num-attention-heads ${NATT} \
+       --seq-length ${MAXSEQLEN} \
        --max-position-embeddings 1024 \
        --tokenizer-type GPT2BPETokenizer \
        --fp16 \
-       --cache-dir cache \
        --out-seq-length 512 \
-       --temperature $TEMP \
-       --top_k $TOPK \
-       --top_p $TOPP \
-       --tokenizer-path ~/bpe/bpe_3w/ \
+       --tokenizer-path ${TOKENIZER_PATH} \
        --vocab-size 30000 \
-       --lr 0.0001 \
-       --warmup 0.05 \
-       --batch-size 8 \
+       --batch-size 2 \
        --deepspeed \
-       --deepspeed_config ${config_json} \
-       --log-interval 10 \
+       --deepspeed_config ${DS_CONFIG} \
        --seed 23333 \
-       --alpha 0 \
-       --save results/ \
+       --results_dir ${RESULTS_DIR} \
+       --model_name ${MODEL_NAME} \

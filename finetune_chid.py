@@ -134,15 +134,12 @@ class CHIDDataset(torch.utils.data.Dataset):
 
         return batch_sample, no_model_sample
 
-def load_data(data_path, data_type, tokenizer, ratio=1):
-    args = get_args()
-    batch_size = args.batch_size
-    args.batch_size = 1
+def load_data(args, data_type, tokenizer, ratio=1):
+    data_path = args.data_dir
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
     rank = mpu.get_data_parallel_rank()
-    args.batch_size = batch_size
     global_batch_size = args.batch_size * world_size
     num_workers = args.num_workers
 
@@ -190,8 +187,12 @@ def evaluate(args, model, dataloader, cand_ids, device, mode="dev"):
     tensor_list_truth = [torch.zeros_like(no_model_batch["truth"], dtype=torch.long) for _ in range(mpu.get_data_parallel_world_size())]
     torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
-    # for convience implementation. Note that the truth labels only appears in the first part of the model.
-    scores = torch.stack(tensor_list, 0).view(-1, 15000)
+    if args.model_parallel_size == 1:
+        scores = torch.stack(tensor_list, 0).view(-1, 30000)
+    else:
+        # for convience implementation. Note that the truth labels only appears in the first part of the model.
+        scores = torch.stack(tensor_list, 0).view(-1, 15000)
+
     truth = torch.stack(tensor_list_truth, 0).view(-1)
     scores = scores[:, cand_ids]
 
@@ -228,8 +229,8 @@ def main():
 
     # load train data
     if args.do_train:
-        train_dataloader, _ = load_data(args.data_dir, 'train', tokenizer, 0.0005)
-        dev_dataloader, dev_dataset = load_data(args.data_dir, 'dev', tokenizer, 0.01)
+        train_dataloader, _ = load_data(args, 'train', tokenizer, 0.0005)
+        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 0.01)
 
         with open(args.deepspeed_config, "r") as f:
             deepspeed_conf = json.load(f)
@@ -241,7 +242,7 @@ def main():
         # Model, optimizer, and learning rate.
         # TODO: maybe need to reinitialize optimizer
     elif args.do_eval:
-        # Set an arbitrary integer since the optimizer and the scheduler will not be used when do eval.
+        # Set an arbitrary positive integer since the optimizer and the scheduler will not be used when do eval.
         args.train_iters = 1
 
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args)
@@ -331,7 +332,7 @@ def main():
 
     if args.do_eval:
         # evaluate on the test
-        test_dataloader, test_dataset = load_data(args.data_dir, 'test', tokenizer, 0.01)
+        test_dataloader, test_dataset = load_data(args, 'test', tokenizer, 0.01)
         cand_ids = torch.tensor(test_dataset.cand_ids).to(device)
 
         if args.do_train:

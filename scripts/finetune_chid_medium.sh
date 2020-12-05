@@ -4,6 +4,7 @@ DATA_DIR="/data/gyx/chid/preprocessed_qa_cands_end"
 CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-medium"
 RESULTS_DIR="results"
 MODEL_NAME="finetune-test-medium"
+TOKENIZER_PATH="/mnt/nfs/home/gyx/bpe/bpe_3w/"
 MPSIZE=1
 NLAYERS=24
 NHIDDEN=1024
@@ -28,7 +29,7 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --tokenizer-type GPT2BPETokenizer \
        --fp16 \
        --out-seq-length 512 \
-       --tokenizer-path ~/bpe/bpe_3w/ \
+       --tokenizer-path ${TOKENIZER_PATH} \
        --vocab-size 30000 \
        --lr 0.00001 \
        --warmup 0.1 \

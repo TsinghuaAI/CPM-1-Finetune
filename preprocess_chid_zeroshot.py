@@ -1,19 +1,18 @@
 import json
 import re
 import os
+import argparse
 from tqdm import tqdm
+from data_utils.tokenization_gpt2 import GPT2Tokenizer
 
-def process_one_sent_train(sent, answers, candidates):
-    pattern = re.compile(r"#idiom\d+#")
-    s = re.sub(pattern, lambda m: candidates[answers[m.group()]], sent)
 
-    return s
-
-def process_one_sent_eval(sent, answers, candidates, idiom2id):
+def process_one_sent_eval(tokenizer, sent, answers, candidates):
     pattern = re.compile(r"#idiom\d+#")
     res = pattern.findall(sent)
     start = 0
     L = []
+    # fill the candidate idioms into the sentence to create candidate passages
+    # NOTE: there may exist more than one blank in a sentence
     while True:
         m = pattern.search(sent, start)
         if m is None:
@@ -24,51 +23,52 @@ def process_one_sent_eval(sent, answers, candidates, idiom2id):
         })
         for idm in candidates:
             cand = sent[:m.start()] + idm + sent[m.end():]
+            # replace other blanks by ""
             cand = re.sub(pattern, "", cand)
-            L[-1]["cands"].append((cand, idiom2id[idm]))
+            ids = tokenizer.encode(cand)
+            L[-1]["cands"].append(ids)
         start = m.end()
     
     return L
 
-data_dir = "/data/gyx/chid/"
-ans_data_dir = "/data/gyx/chid/"
-idiom_data_dir = "/data/gyx/chid/"
 
-preprocesed_dir = "/data/gyx/chid/preprocessed_unbias/"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("--data_dir", default=None, type=str, help="The input dir of original ChID data.")
+    parser.add_argument("--tokenizer_path", type=str, help="The tokenizer path.")
+    parser.add_argument("--output_dir", type=str, help="The processed data output dir.")
 
-os.makedirs(preprocesed_dir, exist_ok=True)
+    args = parser.parse_args()
 
-with open(os.path.join(idiom_data_dir, "idiomDict.json"), "r") as f:
-    idiom_d = json.load(f)
- 
-idioms = list(idiom_d.keys())
-idiom2id = {x: i for i, x in enumerate(idioms)}
+    tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
-for split in ["test"]:
-    with open(os.path.join(data_dir, "{}.json".format(split)), "r") as f:
-        lines = f.readlines()
+    os.makedirs(args.output_dir, exist_ok=True)
 
-    with open(os.path.join(ans_data_dir, "{}_answer.json".format(split)), "r") as f:
-        ans_d = json.load(f)
+    with open(os.path.join(args.data_dir, "idiomDict.json"), "r") as f:
+        idiom_d = json.load(f)
+    
+    idioms = list(idiom_d.keys())
 
-    all_data = {
-        "contents": [],
-        "sids": [],
-        "labels": [],
-        "cids": []
-    }
-    sid = 0
-    for line in tqdm(lines, desc="Preprocessing {}".format(split)):
-        jobj = json.loads(line)
-        for sent in jobj["content"]:
-            if split == "train":
-                sample = process_one_sent_train(sent, ans_d, jobj["candidates"])
-                all_data["contents"].append(sample)
-                all_data["sids"].append(sid)
-                all_data["cids"].append(0)
-                sid += 1
-            else:
-                sample_L = process_one_sent_eval(sent, ans_d, jobj["candidates"], idiom2id)
+    for split in ["test"]:
+        # for zero-shot setting, we only consider test set
+        with open(os.path.join(args.data_dir, "{}.json".format(split)), "r") as f:
+            lines = f.readlines()
+
+        with open(os.path.join(args.data_dir, "{}_answer.json".format(split)), "r") as f:
+            ans_d = json.load(f)
+
+        all_data = {
+            "contents": [],
+            "sids": [],
+            "labels": [],
+            "cids": []
+        }
+        sid = 0
+        for line in tqdm(lines, desc="Preprocessing {}".format(split)):
+            jobj = json.loads(line)
+            for sent in jobj["content"]:
+                sample_L = process_one_sent_eval(tokenizer, sent, ans_d, jobj["candidates"])
                 for samp in sample_L:
                     all_data["contents"].extend(samp["cands"])
                     all_data["sids"].extend([sid for _ in samp["cands"]])
@@ -76,10 +76,10 @@ for split in ["test"]:
                     all_data["labels"].append(samp["truth"])
                     sid += 1
 
-    with open(os.path.join(preprocesed_dir, "{}.json".format(split)), "w") as f:
-        json.dump(all_data, f, indent=4, ensure_ascii=False)
+        with open(os.path.join(args.output_dir, "{}.json".format(split)), "w") as f:
+            json.dump(all_data, f, indent=4, ensure_ascii=False)
 
-    print(len(all_data["contents"]))
+        print(len(all_data["contents"]))
 
-with open(os.path.join(preprocesed_dir, "idioms.json"), "w") as f:
-    json.dump(idioms, f, indent=4, ensure_ascii=False)
+    with open(os.path.join(args.output_dir, "idioms.json"), "w") as f:
+        json.dump(idioms, f, indent=4, ensure_ascii=False)
