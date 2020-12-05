@@ -7,12 +7,6 @@ NHIDDEN=2560
 NATT=32
 MAXSEQLEN=1024
 
-#SAMPLING ARGS
-TEMP=0.9
-#If TOPK/TOPP are 0 it defaults to greedy sampling, top-k will also override top-p
-TOPK=0
-TOPP=0
-
 script_path=$(realpath $0)
 script_dir=$(dirname $script_path)
 config_json="$script_dir/ds_finetune.json"

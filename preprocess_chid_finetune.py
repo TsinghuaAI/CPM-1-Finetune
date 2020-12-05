@@ -1,14 +1,20 @@
 import json
 import re
 import os
+import argparse
 from tqdm import tqdm
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
+
 
 def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
     pattern = re.compile(r"#idiom\d+#")
     res = pattern.findall(sent)
     start = 0
     L = []
+    # Template(NOTE: A little different from the one in the paper): 
+    # 上下文: P_predix <mask> P_postfix <eod> 选项0: I_0 <sep> 选项1: I_1 <sep> ... 选项9: I_9 <sep> <mask> 答案是: L
+    # The P_prefix indicates the text before the idiom. The P_postfix inficates the text after the idiom. We insert <mask> between them for a placeholder of the idiom.
+    # <mask> <eod> and <sep> are the special tokens in our vocabulary.
     while True:
         m = pattern.search(sent, start)
         if m is None:
@@ -39,8 +45,10 @@ def process_one_sent(sent, answers, cands, tokenizer, num_ids, split):
     
     return L
 
+
 def preprocess(data, tokenizer, split):
 
+    # Get the token id of "0", "1", "2", ... "9"
     num_ids = [tokenizer.encode("选项{}:".format(i))[1] for i in range(10)]
 
     lines, ans_d = data
@@ -52,27 +60,31 @@ def preprocess(data, tokenizer, split):
             samples = process_one_sent(sent, ans_d, jobj["candidates"], tokenizer, num_ids, split)
             all_data.extend(samples)
 
-    with open(os.path.join(preprocesed_dir, "{}.json".format(split)), "w") as f:
-        json.dump((num_ids, all_data), f, indent=4, ensure_ascii=False)
+    return num_ids, all_data
 
 
 if __name__ == "__main__":
-    data_dir = "/data/gyx/chid/"
-    ans_data_dir = "/data/gyx/chid/"
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("--data_dir", default=None, type=str, help="The input dir of original ChID data.")
+    parser.add_argument("--output_dir", type=str, help="The output directory where the model predictions and checkpoints will be written.")
+    parser.add_argument("--tokenizer_path", type=str, help="The tokenizer path.")
+    parser.add_argument("--output_dir", type=str, help="The processed data output dir.")
 
-    preprocesed_dir = "/data/gyx/chid/preprocessed_qa_cands_end/"
+    args = parser.parse_args()
 
-    tokenizer_path = "/mnt/nfs/home/gyx/bpe/bpe_3w"
+    tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
-    tokenizer = GPT2Tokenizer(os.path.join(tokenizer_path, 'vocab.json'), os.path.join(tokenizer_path, 'merges.txt'), os.path.join(tokenizer_path, 'chinese_vocab.model'))
-
-    os.makedirs(preprocesed_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     for split in ["test"]:
-        with open(os.path.join(data_dir, "{}.json".format(split)), "r") as f:
+        with open(os.path.join(args.data_dir, "{}.json".format(split)), "r") as f:
             lines = f.readlines()
 
-        with open(os.path.join(ans_data_dir, "{}_answer.json".format(split)), "r") as f:
+        with open(os.path.join(args.data_dir, "{}_answer.json".format(split)), "r") as f:
             ans_d = json.load(f)
 
-        preprocess((lines, ans_d), tokenizer, split)
+        num_ids, all_data = preprocess((lines, ans_d), tokenizer, split)
+
+        with open(os.path.join(args.output_dir, "{}.json".format(split)), "w") as f:
+            json.dump((num_ids, all_data), f, indent=4, ensure_ascii=False)

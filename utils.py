@@ -322,6 +322,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, args):
                             'state.'.format(checkpoint_name))
                 exit()
 
+    print("OKOK")
     # Iterations.
     if args.finetune or release:
         iteration = 0
@@ -365,7 +366,7 @@ def load_weights(src, dst, dst2src=False):
     dst2src=True loads parameters from our models into huggingface's.
     ^dst2src is still untested
     """
-    conv_layer = 'Conv1D' in  str(type(src))
+    conv_layer = 'Conv1D' in str(type(src))
     for n, p in src.named_parameters():
         if dst2src:
             data = dst._parameters[n].data
