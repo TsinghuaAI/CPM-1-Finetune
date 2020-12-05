@@ -27,10 +27,6 @@ import pickle
 from tqdm import tqdm
 from arguments import get_args
 from utils import Timers
-from pretrain_gpt2 import initialize_distributed
-from pretrain_gpt2 import set_random_seed
-from pretrain_gpt2 import get_train_val_test_data
-from pretrain_gpt2 import get_masks_and_position_ids
 from utils import load_checkpoint
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
 from configure_data import configure_data
