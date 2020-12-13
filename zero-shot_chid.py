@@ -182,7 +182,7 @@ def main():
     tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
-    test_dataloader, test_dataset = load_data(args, 'test', tokenizer, 0.005)
+    test_dataloader, test_dataset = load_data(args, 'test', tokenizer, 1)
     # Set an arbitrary positive integer since the optimizer and the scheduler will not be used when do eval.
     args.train_iters = 1
 
