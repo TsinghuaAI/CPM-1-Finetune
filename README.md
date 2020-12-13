@@ -1,6 +1,6 @@
 # CPM-Finetune
 
-本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的训练/测试。目前只支持了 ChID 中文成语填空数据集的实现。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)]
+本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的训练/测试。目前只支持了 ChID 中文成语填空数据集的实现。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)] [[文本生成（CPM-Generate）代码仓库](https://github.com/TsinghuaAI/CPM-Generate)]
 
 同时，该仓库也提供了 ChID 数据集 zero-shot setting 下测试代码。
 
@@ -108,8 +108,7 @@ TOKENIZER_PATH # tokenizer 的路径
 ```
 
 
-
-### 3 参考性能
+## 3 参考性能
 
 |            | Fine-Tune | Zero-Shot |
 | ---------- | --------- | --------- |
@@ -117,3 +116,13 @@ TOKENIZER_PATH # tokenizer 的路径
 | CPM-medium | 0.695     | 0.524     |
 | CPM-large  | **0.804** | **0.685** |
 
+
+## 4 引用
+
+```[latex]
+@article{cpm-v1,
+  title={CPM: A Large-scale Generative Chinese Pre-trained Language Model},
+  author={Zhang, Zhengyan and Han, Xu, and Zhou, Hao, and Ke, Pei, and Gu, Yuxian and Ye, Deming and Qin, Yujia and Su, Yusheng and Ji, Haozhe and Guan, Jian and Qi, Fanchao and Wang, Xiaozhi and Zheng, Yanan and Zeng, Guoyang and Cao, Huanqi and Chen, Shengqi and Li, Daixuan and Sun, Zhenbo and Liu, Zhiyuan and Huang, Minlie and Han, Wentao and Tang, Jie and Li, Juanzi and Sun, Maosong},
+  year={2020}
+}
+```
