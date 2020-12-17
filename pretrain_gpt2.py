@@ -32,7 +32,7 @@ from configure_data import configure_data
 from fp16 import FP16_Module
 from fp16 import FP16_Optimizer
 from learning_rates import AnnealingLR
-from model import GPT2Model, QAGPT2Model
+from model import GPT2Model
 from model import gpt2_get_params_for_weight_decay_optimization
 
 if USE_TORCH_DDP:

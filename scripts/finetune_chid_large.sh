@@ -1,9 +1,9 @@
 #!/bin/bash
 
-DATA_DIR="/data/gyx/chid/preprocessed_qa_cands_end"
+DATA_DIR="/data/gyx/chid/preprocessed_qa_cands_end/"
 CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-large"
 RESULTS_DIR="results"
-MODEL_NAME="finetune-test"
+MODEL_NAME="finetune-test-large"
 TOKENIZER_PATH="/mnt/nfs/home/gyx/bpe/bpe_3w/"
 MPSIZE=2
 NLAYERS=32

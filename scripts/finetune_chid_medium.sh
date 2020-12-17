@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DATA_DIR="/data/gyx/chid/preprocessed_qa_cands_end"
+DATA_DIR="/data/gyx/chid/preprocessed/"
 CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-medium"
 RESULTS_DIR="results"
 MODEL_NAME="finetune-test-medium"

@@ -229,8 +229,8 @@ def main():
 
     # load train data
     if args.do_train:
-        train_dataloader, _ = load_data(args, 'train', tokenizer, 0.0005)
-        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 0.01)
+        train_dataloader, _ = load_data(args, 'train', tokenizer, 1)
+        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 1)
 
         with open(args.deepspeed_config, "r") as f:
             deepspeed_conf = json.load(f)
@@ -332,7 +332,7 @@ def main():
 
     if args.do_eval:
         # evaluate on the test
-        test_dataloader, test_dataset = load_data(args, 'test', tokenizer, 0.01)
+        test_dataloader, test_dataset = load_data(args, 'test', tokenizer, 1)
         cand_ids = torch.tensor(test_dataset.cand_ids).to(device)
 
         if args.do_train:
