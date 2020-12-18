@@ -170,36 +170,37 @@ def evaluate(args, model, dataloader, cand_ids, device, mode="dev"):
     model.eval()
     all_truth, all_preds = [], []
     with torch.no_grad():
-        for batch, no_model_batch in tqdm(dataloader, desc="Evaluating {}".format(mode)):
+        for batch, no_model_batch in tqdm(dataloader, desc="Evaluating {}".format(mode), disable=(torch.distributed.get_rank() != 0)):
             for k in batch:
                 batch[k] = batch[k].to(device)
             for k in no_model_batch:
                 no_model_batch[k] = no_model_batch[k].to(device)
 
-    output = model(**batch)
-    output = torch.sum(output * no_model_batch["loss_mask"].unsqueeze(-1), 1) / torch.sum(no_model_batch["loss_mask"], -1).unsqueeze(-1)
+            output = model(**batch)
+            output = torch.sum(output * no_model_batch["loss_mask"].unsqueeze(-1), 1) / torch.sum(no_model_batch["loss_mask"], -1).unsqueeze(-1)
 
-    # gather the output logits from other gpus
-    tensor_list = [torch.zeros_like(output) for _ in range(mpu.get_data_parallel_world_size())]
-    torch.distributed.all_gather(tensor_list, output, mpu.get_data_parallel_group())
+            # gather the output logits from other gpus
+            tensor_list = [torch.zeros_like(output) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(tensor_list, output, mpu.get_data_parallel_group())
 
-    # gather the truth labels from other gpus
-    tensor_list_truth = [torch.zeros_like(no_model_batch["truth"], dtype=torch.long) for _ in range(mpu.get_data_parallel_world_size())]
-    torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
+            # gather the truth labels from other gpus
+            tensor_list_truth = [torch.zeros_like(no_model_batch["truth"], dtype=torch.long) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(tensor_list_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
 
-    if args.model_parallel_size == 1:
-        scores = torch.stack(tensor_list, 0).view(-1, 30000)
-    else:
-        # for convience implementation. Note that the truth labels only appears in the first part of the model.
-        scores = torch.stack(tensor_list, 0).view(-1, 15000)
+            if args.model_parallel_size == 1:
+                scores = torch.stack(tensor_list, 0).view(-1, 30000)
+            else:
+                # for convience implementation. Note that the truth labels only appears in the first part of the model.
+                scores = torch.stack(tensor_list, 0).view(-1, 15000)
 
-    truth = torch.stack(tensor_list_truth, 0).view(-1)
-    scores = scores[:, cand_ids]
+            truth = torch.stack(tensor_list_truth, 0)
+            truth = truth.view(-1)
+            scores = scores[:, cand_ids]
 
-    preds = torch.argmax(scores, dim=-1)
-        
-    all_truth.extend(truth.detach().cpu().tolist())
-    all_preds.extend(preds.detach().cpu().tolist())
+            preds = torch.argmax(scores, dim=-1)
+
+            all_truth.extend(truth.detach().cpu().tolist())
+            all_preds.extend(preds.detach().cpu().tolist())
         
     acc = sum([int(p == l) for p, l in zip(all_preds, all_truth)]) / len(all_truth)
 
