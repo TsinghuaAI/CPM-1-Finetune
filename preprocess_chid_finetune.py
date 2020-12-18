@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    for split in ["train", "valid", "test"]:
+    for split in ["train", "dev", "test"]:
         with open(os.path.join(args.data_dir, "{}.json".format(split)), "r") as f:
             lines = f.readlines()
 
