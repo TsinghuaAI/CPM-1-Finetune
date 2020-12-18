@@ -66,12 +66,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument("--data_dir", default=None, type=str, help="The input dir of original ChID data.")
-    parser.add_argument("--tokenizer_path", type=str, help="The tokenizer path.")
+    parser.add_argument("--tokenizer_path", type=str, help="The tokenizer path.", default="./bpe_3w_new")
     parser.add_argument("--output_dir", type=str, help="The processed data output dir.")
 
     args = parser.parse_args()
 
-    tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
+    tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     os.makedirs(args.output_dir, exist_ok=True)
 
