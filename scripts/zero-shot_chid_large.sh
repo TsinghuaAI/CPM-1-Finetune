@@ -1,10 +1,10 @@
 #!/bin/bash
 
-DATA_DIR="/data/gyx/chid/preprocessed_zeroshot"
-CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-large"
-RESULTS_DIR="results"
+DATA_DIR="/data/chid/preprocessed/"
+CHECKPOINT_PATH="/data/checkpoints/CPM-large"
+RESULTS_DIR="results/"
 MODEL_NAME="zeroshot-test"
-TOKENIZER_PATH="/mnt/nfs/home/gyx/bpe/bpe_3w/"
+TOKENIZER_PATH="bpe_3w_new/"
 MPSIZE=2
 NLAYERS=32
 NHIDDEN=2560

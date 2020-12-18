@@ -179,7 +179,7 @@ def main():
     set_random_seed(args.seed)
 
     # get the tokenizer
-    tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'merges.txt'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
+    tokenizer = GPT2Tokenizer(os.path.join(args.tokenizer_path, 'vocab.json'), os.path.join(args.tokenizer_path, 'chinese_vocab.model'))
 
     # load data
     test_dataloader, test_dataset = load_data(args, 'test', tokenizer, 1)

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-DATA_DIR="/data/gyx/chid/preprocessed_qa_cands_end/"
-CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-large"
-RESULTS_DIR="results"
+DATA_DIR="/data/chid/preprocessed/"
+CHECKPOINT_PATH="/data/checkpoints/CPM-large"
+RESULTS_DIR="results/"
 MODEL_NAME="finetune-test-large"
-TOKENIZER_PATH="/mnt/nfs/home/gyx/bpe/bpe_3w/"
+TOKENIZER_PATH="bpe_3w_new/"
 MPSIZE=2
 NLAYERS=32
 NHIDDEN=2560
@@ -36,8 +36,8 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --batch-size 2 \
        --deepspeed \
        --deepspeed_config ${DS_CONFIG} \
-       --log-interval 1 \
-       --eval-interval 3 \
+       --log-interval 10 \
+       --eval-interval 1000 \
        --seed 23333 \
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \
