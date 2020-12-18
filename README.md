@@ -4,6 +4,8 @@
 
 同时，该仓库也提供了 ChID 数据集 zero-shot setting 下测试代码。
 
+ChID 数据集来源于论文 [ChID: A Large-scale Chinese IDiom Dataset for Cloze Test](https://www.aclweb.org/anthology/P19-1075/). 本仓库中使用 [Json 格式](https://drive.google.com/file/d/1KkwLSLgrV9JknO8rxxfmU5Iql-D4O_-6/view).
+
 ## 1 安装
 
 首先需要安装各种依赖。具体安装方式详见 [文本生成（CPM-Generate）代码仓库](https://github.com/TsinghuaAI/CPM-Generate)。
