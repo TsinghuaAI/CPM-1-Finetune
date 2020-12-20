@@ -36,8 +36,8 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --batch-size 2 \
        --deepspeed \
        --deepspeed_config ${DS_CONFIG} \
-       --log-interval 1 \
-       --eval-interval 3 \
+       --log-interval 10 \
+       --eval-interval 1000 \
        --seed 23333 \
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \

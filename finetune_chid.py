@@ -190,7 +190,8 @@ def evaluate(args, model, dataloader, cand_ids, device, mode="dev"):
             if args.model_parallel_size == 1:
                 scores = torch.stack(tensor_list, 0).view(-1, 30000)
             else:
-                # for convience implementation. Note that the truth labels only appears in the first part of the model.
+                assert args.model_parallel_size == 2, "Now, we only support model parallel <= 2"
+                # for convience implementation. Note that the truth labels only appears in the first 15000 part of the logits, e.g. on rank 0, 2, 4, ...
                 scores = torch.stack(tensor_list, 0).view(-1, 15000)
 
             truth = torch.stack(tensor_list_truth, 0)
@@ -203,8 +204,12 @@ def evaluate(args, model, dataloader, cand_ids, device, mode="dev"):
             all_preds.extend(preds.detach().cpu().tolist())
         
     acc = sum([int(p == l) for p, l in zip(all_preds, all_truth)]) / len(all_truth)
+    acc = torch.tensor(acc).to(device)
+    
+    acc_list = [torch.zeros_like(acc) for _ in range(mpu.get_model_parallel_world_size())]
+    torch.distributed.all_gather(acc_list, acc, mpu.get_model_parallel_group())
 
-    return acc, all_truth, all_preds
+    return acc_list[0].item(), all_truth, all_preds
 
 
 def main():
@@ -231,7 +236,7 @@ def main():
     # load train data
     if args.do_train:
         train_dataloader, _ = load_data(args, 'train', tokenizer, 1)
-        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 1)
+        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 0.01)
 
         with open(args.deepspeed_config, "r") as f:
             deepspeed_conf = json.load(f)

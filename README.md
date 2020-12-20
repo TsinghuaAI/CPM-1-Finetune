@@ -8,7 +8,41 @@ ChID 数据集来源于论文 [ChID: A Large-scale Chinese IDiom Dataset for Clo
 
 ## 1 安装
 
-首先需要安装各种依赖。具体安装方式详见 [文本生成（CPM-Generate）代码仓库](https://github.com/TsinghuaAI/CPM-Generate)。
+首先安装 pytorch 等基础依赖，再安装[APEX](https://github.com/NVIDIA/apex#quick-start)以支持 fp16，然后安装 deepspeed：
+
+**安装基础依赖：**
+
+```[bash]
+pip install -r requirements.txt
+```
+
+**安装 apex：**
+
+```[bash]
+git clone https://github.com/NVIDIA/apex
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+```
+
+考虑apex的安装容易发生问题，我们构建了对应的Docker容器，可以进行快速环境搭建。安装方式如下：
+
+```[bash]
+docker pull dmye/cpm:v0
+```
+
+参考运行指令如下：
+
+```[bash]
+sudo docker run --gpus '"device=0,1"' -it -v <path>:/CPM  --name=cpm  cpm:v0
+```
+
+其中`<path>`为代码所在目录，-v进行文件目录挂载
+
+**安装 deepspeed**
+
+我们使用了以下版本的 deepspeed：
+<https://github.com/microsoft/DeepSpeed/tree/f0f2a7026877d3fd2f6f5565a67cdffc89750cf0>
+可根据其提供的文档进行安装。
 
 ## 2 Fine-Tune
 
