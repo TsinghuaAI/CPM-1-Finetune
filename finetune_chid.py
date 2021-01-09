@@ -236,7 +236,7 @@ def main():
     # load train data
     if args.do_train:
         train_dataloader, _ = load_data(args, 'train', tokenizer, 1)
-        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 0.01)
+        dev_dataloader, dev_dataset = load_data(args, 'dev', tokenizer, 1)
 
         with open(args.deepspeed_config, "r") as f:
             deepspeed_conf = json.load(f)
@@ -257,9 +257,9 @@ def main():
     # give a time stemp to the model
     cur_time = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
     results_dir = os.path.join(args.results_dir, "{}-{}".format(args.model_name, cur_time))
+    os.makedirs(results_dir, exist_ok=True)
 
     if args.do_train and torch.distributed.get_rank() == 0:
-        os.makedirs(results_dir, exist_ok=True)
 
         with open(os.path.join(results_dir, "train_log.txt"), "w") as f:
             f.write("Train losses:\n")
@@ -335,6 +335,9 @@ def main():
                         save_checkpoint(global_step, model, optimizer, lr_scheduler, args)
 
                 total_step += 1
+
+        with open(os.path.join(dev_results_dir, "dev_log.txt"), "a") as f:
+            f.write("Best acc: {} Best step: {}\n".format(best_acc, best_step))
 
     if args.do_eval:
         # evaluate on the test

@@ -82,6 +82,8 @@ MODEL_NAME # 给模型起的名字
 TOKENIZER_PATH # tokenizer 的路径
 ```
 
+进行测试之前，需要去掉脚本中 `--do_train` 选项，然后可以使用 `--eval_ckpt_path` 选项来指定需要测试的模型。
+
 ## 3 Zero-Shot
 
 ### 3.1 数据预处理
