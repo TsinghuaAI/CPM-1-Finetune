@@ -286,7 +286,8 @@ def main():
                 # get the loss of the last token
                 output = torch.sum(output * no_model_batch["loss_mask"].unsqueeze(-1), 1) / torch.sum(no_model_batch["loss_mask"], -1).unsqueeze(-1)
                 # get the label of the last token
-                labels = (torch.sum(no_model_batch["labels"] * no_model_batch["loss_mask"], 1) / torch.sum(no_model_batch["loss_mask"], -1)).long()
+                labels = no_model_batch["labels"].float()
+                labels = (torch.sum(labels * no_model_batch["loss_mask"], 1) / torch.sum(no_model_batch["loss_mask"], -1)).long()
                 # cross_entropy loss
                 losses = mpu.vocab_parallel_cross_entropy(output.unsqueeze(1).contiguous().float(), labels.unsqueeze(1))
                 loss = torch.mean(losses)
