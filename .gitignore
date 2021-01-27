@@ -1,4 +1,5 @@
 .vscode/
 upload.sh
 results/
+results-local
 __pycache__

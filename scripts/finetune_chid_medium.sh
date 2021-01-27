@@ -33,7 +33,7 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --vocab-size 30000 \
        --lr 0.00001 \
        --warmup 0.1 \
-       --batch-size 2 \
+       --batch-size 8 \
        --deepspeed \
        --deepspeed_config ${DS_CONFIG} \
        --log-interval 10 \
@@ -42,3 +42,5 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \
        --epoch 10 \
+       --checkpoint-activations \
+       --deepspeed-activation-checkpointing
