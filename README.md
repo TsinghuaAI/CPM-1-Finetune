@@ -68,8 +68,16 @@ python3 preprocess_chid_finetune.py --data_dir ${PATH_TO_DATA_DIR} --tokenizer_p
 
 ### 2.2 Fine-Tune 训练/测试
 
+进行 fine-tune 训练的时候可以选择 fp16 或者 fp32。我们在实验中发现，在使用 fp16 进行训练的时候，需要加载预训练时的动量才能使模型较快收敛，而采用 fp32 训练则不会有这个问题。因此，我们推荐直接使用 fp32 进行 fine-tune 训练。
+
+另外，关于内存使用，我们使用了 deepspeed 的 activation checkpointing 以节省内存，相关选项已经在运行脚本中修改。
+
 ```[bash]
 bash scripts/finetune_chid_large.sh
+```
+或
+```[bash]
+bash scripts/finetune_chid_large_fp32.sh
 ```
 
 运行脚本之前，需要先将脚本中以下变量更改为实际的路径：
