@@ -19,6 +19,7 @@ import os
 import random
 import numpy as np
 import torch
+from torch import tensor
 import torch.nn.functional as F
 import argparse
 import time
@@ -189,10 +190,13 @@ def evaluate(args, model, dataloader, cand_ids, device, mode="dev"):
 
             if args.model_parallel_size == 1:
                 scores = torch.stack(tensor_list, 0).view(-1, 30000)
-            else:
-                assert args.model_parallel_size == 2, "Now, we only support model parallel <= 2"
+            elif args.model_parallel_size == 2:
+                # assert args.model_parallel_size == 2, "Now, we only support model parallel <= 2"
                 # for convience implementation. Note that the truth labels only appears in the first 15000 part of the logits, e.g. on rank 0, 2, 4, ...
                 scores = torch.stack(tensor_list, 0).view(-1, 15000)
+            else:
+                assert args.model_parallel_size == 4
+                scores = torch.stack(tensor_list, 0).view(-1, 7500)
 
             truth = torch.stack(tensor_list_truth, 0)
             truth = truth.view(-1)
