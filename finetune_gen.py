@@ -251,14 +251,11 @@ def main():
                     no_model_batch[k] = no_model_batch[k].to(device)
 
                 output = model(**batch)
-                loss_mask = no_model_batch["loss_mask"]
-                output = output * no_model_batch["loss_mask"].unsqueeze(-1)
-                
-                labels = (no_model_batch["labels"].float() * loss_mask).long()
-
-                # cross_entropy loss
+                labels = no_model_batch["labels"]
                 losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
-                loss = torch.mean(losses)
+
+                loss_mask = no_model_batch["loss_mask"].view(-1)
+                loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
 
                 model.backward(loss)
                 model.step()
