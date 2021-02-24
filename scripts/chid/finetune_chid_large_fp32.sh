@@ -1,9 +1,9 @@
 #!/bin/bash
 
-DATA_DIR="/data/chid/preprocessed/"
-CHECKPOINT_PATH="/data/checkpoints/CPM-large"
-RESULTS_DIR="results/"
-MODEL_NAME="finetune-test-large-fp32"
+DATA_DIR="/data/gyx/chid/preprocessed/"
+CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-large"
+RESULTS_DIR="results-local/"
+MODEL_NAME="finetune-chid-large-fp32"
 TOKENIZER_PATH="bpe_3w_new/"
 MPSIZE=2
 NLAYERS=32
@@ -13,7 +13,7 @@ MAXSEQLEN=1024
 
 CUR_PATH=$(realpath $0)
 CUR_DIR=$(dirname ${CUR_PATH})
-DS_CONFIG="${CUR_DIR}/ds_finetune_large_fp32.json"
+DS_CONFIG="${CUR_DIR}/../ds_config/ds_finetune_large_fp32.json"
 
 python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 finetune_chid.py \
        --do_train \

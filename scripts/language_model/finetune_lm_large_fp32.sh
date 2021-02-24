@@ -13,9 +13,9 @@ MAXSEQLEN=200
 
 CUR_PATH=$(realpath $0)
 CUR_DIR=$(dirname ${CUR_PATH})
-DS_CONFIG="${CUR_DIR}/ds_finetune_large_fp32.json"
+DS_CONFIG="${CUR_DIR}/../ds_config/ds_finetune_lm_large_fp32.json"
 
-python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 finetune_gen.py \
+python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 finetune_lm.py \
        --do_train \
        --do_eval \
        --data_dir ${DATA_DIR} \
@@ -39,6 +39,6 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 f
        --seed 23333 \
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \
-       --epoch 10 \
+       --epoch 1 \
        --checkpoint-activations \
        --deepspeed-activation-checkpointing
