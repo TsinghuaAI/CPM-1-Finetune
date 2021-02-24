@@ -1,0 +1,11 @@
+{
+  "train_micro_batch_size_per_gpu": 4,
+  "gradient_accumulation_steps": 4,
+  "steps_per_print": 100000000,
+  "gradient_clipping": 1.0,
+  "activation_checkpointing": {
+    "partition_activations": true,
+    "contiguous_memory_optimization": false
+  },
+  "wall_clock_breakdown": false
+}

@@ -76,7 +76,6 @@ class GenDataset(torch.utils.data.Dataset):
     def process(self, data):
         samples = []
         for doc in tqdm(data[:int(self.ratio * len(data))], disable=(torch.distributed.get_rank() != 0)):
-            doc = doc.replace("<n>", "\n")
             token_ids = self.tokenizer.encode(doc)
             token_ids.append(self.eod_token)
             start = 0

@@ -1,15 +1,15 @@
 #!/bin/bash
 
-DATA_DIR="/mnt/nfs/home/gyx/data/gen/"
-CHECKPOINT_PATH="/data/checkpoints/CPM-large"
-RESULTS_DIR="results/"
-MODEL_NAME="finetune-gen-large-fp32"
+DATA_DIR="/mnt/nfs/home/gyx/data/STC/"
+CHECKPOINT_PATH="/mnt/nfs/home/zzy/checkpoints/CPM-large"
+RESULTS_DIR="results-local/"
+MODEL_NAME="finetune-dial-large-fp32"
 TOKENIZER_PATH="bpe_3w_new/"
 MPSIZE=2
 NLAYERS=32
 NHIDDEN=2560
 NATT=32
-MAXSEQLEN=1024
+MAXSEQLEN=200
 
 CUR_PATH=$(realpath $0)
 CUR_DIR=$(dirname ${CUR_PATH})
@@ -31,7 +31,7 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 f
        --vocab-size 30000 \
        --lr 0.00001 \
        --warmup 0.1 \
-       --batch-size 4 \
+       --batch-size 16 \
        --deepspeed \
        --deepspeed_config ${DS_CONFIG} \
        --log-interval 10 \
