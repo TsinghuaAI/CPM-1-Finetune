@@ -16,34 +16,21 @@
 """Sample Generate GPT2"""
 
 import os
-import random
-import numpy as np
 import torch
-import torch.nn.functional as F
-import argparse
 import time
 import json
-import pickle
 from tqdm import tqdm
 from arguments import get_args
 from utils import Timers
-from utils import load_checkpoint
 from data_utils.tokenization_gpt2 import GPT2Tokenizer
-from configure_data import configure_data
 import mpu
-import deepspeed
 import json
 
 from tqdm import tqdm
-from fp16 import FP16_Module
-from model import GPT2Model
-from model import DistributedDataParallel as DDP
-from utils import print_rank_0
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from torch.utils.data import TensorDataset
+from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer
 
-from pretrain_gpt2 import *
 
 def yprint(str):
     print("\033[43;30m{}\033[0m".format(str))
