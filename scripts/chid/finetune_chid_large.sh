@@ -28,7 +28,6 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 f
        --max-position-embeddings 1024 \
        --tokenizer-type GPT2BPETokenizer \
        --fp16 \
-       --out-seq-length 512 \
        --tokenizer-path ${TOKENIZER_PATH} \
        --vocab-size 30000 \
        --lr 0.00001 \

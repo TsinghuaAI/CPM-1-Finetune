@@ -29,11 +29,8 @@ import json
 from tqdm import tqdm
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer
+from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer, yprint
 
-
-def yprint(str):
-    print("\033[43;30m{}\033[0m".format(str))
 
 class CHIDDataset(torch.utils.data.Dataset):
     def __init__(self, args, data_path, split, tokenizer, ratio=1):

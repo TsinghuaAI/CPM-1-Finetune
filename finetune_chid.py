@@ -35,11 +35,7 @@ import time
 from tqdm import tqdm
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer
-
-
-def yprint(str):
-    print("\033[43;30m{}\033[0m".format(str))
+from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer, yprint
 
 
 class CHIDDataset(torch.utils.data.Dataset):
@@ -350,7 +346,7 @@ def main():
         if torch.distributed.get_rank() == 0:
             eval_log = "Checkpoint from {}: Acc: {}".format(args.load, acc)
             yprint(eval_log)
-            with open(os.path.join(results_dir, "eval_log"), "w") as f:
+            with open(os.path.join(results_dir, "eval_log.txt"), "w") as f:
                 f.write(eval_log + "\n")
 
         torch.distributed.barrier()

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-DATA_DIR="/data/gyx/chid/preprocessed/"
-CHECKPOINT_PATH="/mnt/nfs/home/gyx/CPM-distill/results/final"
-RESULTS_DIR="results-local/"
+DATA_DIR="/data/chid/preprocessed/"
+CHECKPOINT_PATH="/data/checkpoints/CPM-small"
+RESULTS_DIR="results"
 MODEL_NAME="finetune-chid-small"
 TOKENIZER_PATH="bpe_3w_new/"
 MPSIZE=2

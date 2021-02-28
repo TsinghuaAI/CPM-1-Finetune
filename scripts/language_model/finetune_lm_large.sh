@@ -3,7 +3,7 @@
 DATA_DIR="/data/STC/preprocessed/"
 CHECKPOINT_PATH="/data/checkpoints/CPM-large"
 RESULTS_DIR="results/"
-MODEL_NAME="finetune-dial-large-fp32"
+MODEL_NAME="finetune-dial-large"
 TOKENIZER_PATH="bpe_3w_new/"
 MPSIZE=2
 NLAYERS=32
@@ -13,7 +13,7 @@ MAXSEQLEN=200
 
 CUR_PATH=$(realpath $0)
 CUR_DIR=$(dirname ${CUR_PATH})
-DS_CONFIG="${CUR_DIR}/../ds_config/ds_finetune_lm_large_fp32.json"
+DS_CONFIG="${CUR_DIR}/../ds_config/ds_finetune_lm_large.json"
 
 python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 finetune_lm.py \
        --do_train \
@@ -27,6 +27,7 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 f
        --seq-length ${MAXSEQLEN} \
        --max-position-embeddings 1024 \
        --tokenizer-type GPT2BPETokenizer \
+       --fp16 \
        --tokenizer-path ${TOKENIZER_PATH} \
        --vocab-size 30000 \
        --lr 0.00001 \

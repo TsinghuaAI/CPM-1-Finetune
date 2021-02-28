@@ -1,11 +1,11 @@
 #!/bin/bash
 
-DATA_DIR="/data/chid/preprocessed/"
-CHECKPOINT_PATH="/data/checkpoints/CPM-small"
+DATA_DIR="/data/chid/preprocessed_zeroshot_word"
+CHECKPOINT_PATH="/data/results/final"
 RESULTS_DIR="results/"
 MODEL_NAME="zeroshot-small-chid"
 TOKENIZER_PATH="bpe_3w_new/"
-MPSIZE=1
+MPSIZE=2
 NLAYERS=12
 NHIDDEN=768
 NATT=12
@@ -15,7 +15,7 @@ CUR_PATH=$(realpath $0)
 CUR_DIR=$(dirname ${CUR_PATH})
 DS_CONFIG="${CUR_DIR}/../ds_config/ds_finetune_small.json"
 
-python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 zero-shot_chid.py \
+python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 zero-shot_chid.py \
        --data_dir ${DATA_DIR} \
        --model-parallel-size ${MPSIZE} \
        --num-layers ${NLAYERS} \

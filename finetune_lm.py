@@ -35,11 +35,7 @@ import time
 from tqdm import tqdm
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer
-
-
-def yprint(str):
-    print("\033[43;30m{}\033[0m".format(str))
+from utils import initialize_distributed, set_random_seed, setup_model_and_optimizer, yprint
 
 
 class GenDataset(torch.utils.data.Dataset):
@@ -192,7 +188,7 @@ def main():
     # load train data
     if args.do_train:
         train_dataloader, _ = load_data(args, 'train', tokenizer, 1)
-        dev_dataloader, _ = load_data(args, 'dev', tokenizer, 1)
+        dev_dataloader, _ = load_data(args, 'valid', tokenizer, 1)
 
         with open(args.deepspeed_config, "r") as f:
             deepspeed_conf = json.load(f)
@@ -267,7 +263,7 @@ def main():
                         dev_results_dir = os.path.join(results_dir, "dev_step-{}".format(global_step))
 
                         if dev_loss < best_dev_loss:
-                            best_dev_loss = loss
+                            best_dev_loss = dev_loss
                             best_step = global_step
 
                         if torch.distributed.get_rank() == 0:
@@ -287,7 +283,7 @@ def main():
 
                 total_step += 1
 
-        with open(os.path.join(dev_results_dir, "dev_log.txt"), "a") as f:
+        with open(os.path.join(results_dir, "final_dev_result.txt"), "a") as f:
             f.write("Best Loss: {} Best PPL: {}, Best step: {}\n".format(best_dev_loss, np.exp(best_dev_loss), best_step))
 
     if args.do_eval:
@@ -308,7 +304,7 @@ def main():
         if torch.distributed.get_rank() == 0:
             eval_log = "Checkpoint from {}: Loss: {} PPL: {}".format(args.load, eval_loss, np.exp(eval_loss))
             yprint(eval_log)
-            with open(os.path.join(results_dir, "eval_log"), "w") as f:
+            with open(os.path.join(results_dir, "eval_log.txt"), "w") as f:
                 f.write(eval_log + "\n")
 
         torch.distributed.barrier()

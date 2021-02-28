@@ -40,6 +40,10 @@ from apex.optimizers import FusedAdam as Adam
 import deepspeed
 
 
+def yprint(str):
+    print("\033[43;30m{}\033[0m".format(str))
+
+
 def print_rank_0(message):
     if torch.distributed.is_initialized():
         if torch.distributed.get_rank() == 0:
