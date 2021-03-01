@@ -1,10 +1,15 @@
 # CPM-Finetune
 
-本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的训练/测试。目前只支持了 ChID 中文成语填空数据集的实现。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)]
+本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的训练/测试。目前支持了 ChID 中文成语填空数据集和 STC 中文对话数据集。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)]
 
 同时，该仓库也提供了 ChID 数据集 zero-shot setting 下测试代码。
 
-ChID 数据集来源于论文 [ChID: A Large-scale Chinese IDiom Dataset for Cloze Test](https://www.aclweb.org/anthology/P19-1075/). 本仓库中使用 [Json 格式](https://drive.google.com/file/d/1KkwLSLgrV9JknO8rxxfmU5Iql-D4O_-6/view).
+ChID 数据集来源于论文 [ChID: A Large-scale Chinese IDiom Dataset for Cloze Test](https://www.aclweb.org/anthology/P19-1075/). 
+
+STC 数据集来源于论文 [Neural Responding Machine for Short-Text Conversation](https://www.aclweb.org/anthology/P15-1152/).
+
+两个数据集可从[这里](https://drive.google.com/drive/folders/1gL01xbFBcrgP0TmgOhJ_uplkeG-BCwvM)下载。
+
 
 ## 1 安装
 
@@ -44,10 +49,12 @@ sudo docker run --gpus '"device=0,1"' -it -v <path>:/CPM  --name=cpm  cpm:v0
 <https://github.com/microsoft/DeepSpeed/tree/f0f2a7026877d3fd2f6f5565a67cdffc89750cf0>
 可根据其提供的文档进行安装。
 
+
 ## 2 Fine-Tune
 
 ### 2.1 数据预处理
 
+### 2.1.1 ChiD
 ```[bash]
 python3 preprocess_chid_finetune.py --data_dir ${PATH_TO_DATA_DIR} --tokenizer_path ${PATH_TO_TOKENIZER} --output_dir ${PATH_TO_OUTPUT}
 ```
@@ -64,7 +71,18 @@ python3 preprocess_chid_finetune.py --data_dir ${PATH_TO_DATA_DIR} --tokenizer_p
 ]
 ```
 
-与处理完成后，指定的输出目录下会生成 train.json, valid.json, test.json 三个文件。
+预处理完成后，指定的输出目录下会生成 train.json, valid.json, test.json 三个文件。
+
+### 2.1.2 STC
+
+```[bash]
+python3 preprocess_stc_finetune.py --data_dir ${PATH_TO_DATA_DIR} --output_dir ${PATH_TO_OUTPUT}
+```
+
+该文件会将每段对话写成一行，上文前加入“对话上文:”，下文前加入“回复:”：
+```
+对话上文:二十六年前的我挺瘦吧？不知这几位盲童现在好吗？ 回复:恩，不但瘦，头发还很多。
+```
 
 ### 2.2 Fine-Tune 训练/测试
 
@@ -72,12 +90,23 @@ python3 preprocess_chid_finetune.py --data_dir ${PATH_TO_DATA_DIR} --tokenizer_p
 
 另外，关于内存使用，我们使用了 deepspeed 的 activation checkpointing 以节省内存，相关选项已经在运行脚本中修改。
 
+#### ChID:
+
 ```[bash]
-bash scripts/finetune_chid_large.sh
+bash scripts/chid/finetune_chid_large.sh
 ```
 或
 ```[bash]
-bash scripts/finetune_chid_large_fp32.sh
+bash scripts/chid/finetune_chid_large_fp32.sh
+```
+
+#### STC:
+```[bash]
+bash scripts/language_model/finetune_lm_large.sh
+```
+或
+```[bash]
+bash scripts/langauge_model/finetune_lm_large_fp32.sh
 ```
 
 运行脚本之前，需要先将脚本中以下变量更改为实际的路径：
@@ -91,6 +120,7 @@ TOKENIZER_PATH # tokenizer 的路径
 ```
 
 进行测试之前，需要去掉脚本中 `--do_train` 选项，然后可以使用 `--eval_ckpt_path` 选项来指定需要测试的模型。
+
 
 ## 3 Zero-Shot
 
@@ -140,7 +170,7 @@ python3 preprocess_chid_zeroshot.py --data_dir ${PATH_TO_DATA_DIR} --tokenizer_p
 ### 3.2 Zero-Shot 测试
 
 ```[bash]
-bash scripts/zero-shot_chid_large.sh
+bash scripts/chid/zero-shot_chid_large.sh
 ```
 
 运行脚本之前，需要先将脚本中以下变量更改为实际的路径：
