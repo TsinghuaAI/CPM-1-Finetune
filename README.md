@@ -84,6 +84,8 @@ python3 preprocess_stc_finetune.py --data_dir ${PATH_TO_DATA_DIR} --output_dir $
 对话上文:二十六年前的我挺瘦吧？不知这几位盲童现在好吗？ 回复:恩，不但瘦，头发还很多。
 ```
 
+注意：由于 STC 数据集很大，我们在数据预处理的时候切了其训练集的前 10% 以方便使用者测试 Fine-tune。
+
 ### 2.2 Fine-Tune 训练/测试
 
 进行 fine-tune 训练的时候可以选择 fp16 或者 fp32。我们在实验中发现，在使用 fp16 进行训练的时候，需要加载预训练时的动量才能使模型较快收敛，而采用 fp32 训练则不会有这个问题。因此，我们推荐直接使用 fp32 进行 fine-tune 训练。
