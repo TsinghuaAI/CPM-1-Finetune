@@ -16,11 +16,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-import sys
 import json
-import logging
-import os
-import regex as re
 from io import open
 import sentencepiece as spm
 import jieba
@@ -32,8 +28,6 @@ except ImportError:
     # because honestly I don't want to support a byte-level unicode BPE tokenizer on python 2 right now.
     def lru_cache():
         return lambda func: func
-
-from .file_utils import cached_path
 
 class GPT2Tokenizer(object):
 
