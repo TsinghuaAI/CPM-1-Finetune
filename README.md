@@ -1,6 +1,6 @@
 # CPM-Finetune
 
-本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的训练/测试。目前支持了 ChID 中文成语填空数据集和 STC 中文对话数据集。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)]
+本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的多机多卡训练/测试。目前支持了 ChID 中文成语填空数据集和 STC 中文对话数据集。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)]
 
 同时，该仓库也提供了 ChID 数据集 zero-shot setting 下测试代码。
 
@@ -95,20 +95,16 @@ python3 preprocess_stc_finetune.py --data_dir ${PATH_TO_DATA_DIR} --output_dir $
 #### ChID:
 
 ```[bash]
-bash scripts/chid/finetune_chid_large.sh
-```
-或
-```[bash]
-bash scripts/chid/finetune_chid_large_fp32.sh
+bash scripts/chid/finetune_chid_large.sh # for fp16 fine-tune
+bash scripts/chid/finetune_chid_large_fp32.sh # for fp32 fine-tune
+bash scripts/chid/finetune_chid_large_fp32_multinode.sh # for multi-node fp32 fine-tune
 ```
 
 #### STC:
 ```[bash]
-bash scripts/language_model/finetune_lm_large.sh
-```
-或
-```[bash]
-bash scripts/langauge_model/finetune_lm_large_fp32.sh
+bash scripts/language_model/finetune_lm_large.sh # for fp16 fine-tune
+bash scripts/language_model/finetune_lm_large_fp32.sh # for fp32 fine-tune
+bash scripts/language_model/finetune_lm_large_fp32_multinode.sh # for multi-node fp32 fine-tune
 ```
 
 运行脚本之前，需要先将脚本中以下变量更改为实际的路径：
@@ -120,6 +116,13 @@ RESULTS_DIR # 训练结果的存放处
 MODEL_NAME # 给模型起的名字
 TOKENIZER_PATH # tokenizer 的路径
 ```
+
+如果要进行多机训练，可能还需要修改
+```[bash]
+NUM_WORKERS # 节点数量
+NUM_GPUS_PER_WORKER # 每个节点的卡数
+```
+以及 `scripts/host_files/hostfile` 文件。具体格式可以参考 deepspeed 的[官方文档](https://www.deepspeed.ai/getting-started/)
 
 进行测试之前，需要去掉脚本中 `--do_train` 选项，然后可以使用 `--eval_ckpt_path` 选项来指定需要测试的模型。
 
