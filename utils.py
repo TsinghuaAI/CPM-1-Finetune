@@ -491,8 +491,11 @@ def setup_model_and_optimizer(args, model_cls=GPT2Model):
     """Setup model and optimizer."""
 
     model = get_model(args, model_cls)
-    optimizer = get_optimizer(model, args)
-    lr_scheduler = get_learning_rate_scheduler(optimizer, args)
+    if not args.deepspeed and args.zero_shot:
+        optimizer, lr_scheduler = None, None
+    else:
+        optimizer = get_optimizer(model, args)
+        lr_scheduler = get_learning_rate_scheduler(optimizer, args)
 
     if args.deepspeed:
         print_rank_0("DeepSpeed is enabled.")

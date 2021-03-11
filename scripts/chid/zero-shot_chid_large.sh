@@ -35,3 +35,4 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 4 z
        --seed 23333 \
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \
+       --zero_shot \

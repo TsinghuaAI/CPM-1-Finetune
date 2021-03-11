@@ -106,6 +106,8 @@ def add_training_args(parser):
                        help="Do training")
     group.add_argument('--do_eval', action='store_true',
                        help="Do evaluation")
+    group.add_argument('--zero_shot', action="store_true",
+                        help="do zero-shot")
     group.add_argument('--batch-size', type=int, default=4,
                        help='Data Loader batch size')
     group.add_argument('--weight-decay', type=float, default=0.01,

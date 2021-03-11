@@ -13,7 +13,6 @@ MAXSEQLEN=1024
 
 CUR_PATH=$(realpath $0)
 CUR_DIR=$(dirname ${CUR_PATH})
-DS_CONFIG="${CUR_DIR}/../ds_config/ds_finetune_small.json"
 
 python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 zero-shot_chid.py \
        --data_dir ${DATA_DIR} \
@@ -30,8 +29,7 @@ python3 -m torch.distributed.launch --master_port ${1-1122} --nproc_per_node 8 z
        --tokenizer-path ${TOKENIZER_PATH} \
        --vocab-size 30000 \
        --batch-size 2 \
-       --deepspeed \
-       --deepspeed_config ${DS_CONFIG} \
        --seed 23333 \
        --results_dir ${RESULTS_DIR} \
        --model_name ${MODEL_NAME} \
+       --zero_shot \
