@@ -16,3 +16,10 @@
 from .distributed import *
 from .gpt2_modeling import gpt2_get_params_for_weight_decay_optimization
 from .gpt2_modeling import GPT2Model
+
+from .enc_dec_modeling import EncDecModel
+from .enc_dec_modeling import enc_dec_get_params_for_weight_decay_optimization
+from .configuration_enc_dec import EncDecConfig
+
+from .model import BertModel
+from .model import get_params_for_weight_decay_optimization

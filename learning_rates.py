@@ -21,14 +21,15 @@ import math
 class AnnealingLR(_LRScheduler):
     """Anneals the learning rate from start to zero along a cosine curve."""
 
-    DECAY_STYLES = ['linear', 'cosine', 'exponential', 'constant', 'None']
+    DECAY_STYLES = ['linear', 'cosine', 'exponential', 'constant', 'None', 'noam']
 
-    def __init__(self, optimizer, start_lr, warmup_iter, num_iters, decay_style=None, last_iter=-1):
+    def __init__(self, optimizer, start_lr, warmup_iter, num_iters, decay_style=None, last_iter=-1, gradient_accumulation_steps=1):
         self.optimizer = optimizer
         self.start_lr = start_lr
-        self.warmup_iter = warmup_iter
+        self.warmup_iter = warmup_iter // gradient_accumulation_steps
         self.num_iters = last_iter + 1
         self.end_iter = num_iters
+        self.gradient_accumulation_steps = gradient_accumulation_steps
         self.decay_style = decay_style.lower() if isinstance(decay_style, str) else None
         self.step(self.num_iters)
         if torch.distributed.get_rank() == 0:
@@ -37,7 +38,10 @@ class AnnealingLR(_LRScheduler):
     def get_lr(self):
         # https://openreview.net/pdf?id=BJYwwY9ll pg. 4
         if self.warmup_iter > 0 and self.num_iters <= self.warmup_iter:
-            return float(self.start_lr) * self.num_iters / self.warmup_iter
+            if self.decay_style != self.DECAY_STYLES[5]:
+                return float(self.start_lr) * self.num_iters / self.warmup_iter
+            else:
+                return float(self.start_lr) / math.sqrt(self.warmup_iter) * self.num_iters / self.warmup_iter #* self.num_iters / self.warmup_iter / math.sqrt(self.warmup_iter)
         else:
             if self.decay_style == self.DECAY_STYLES[0]:
                 return self.start_lr*((self.end_iter-(self.num_iters-self.warmup_iter))/self.end_iter)
@@ -46,6 +50,8 @@ class AnnealingLR(_LRScheduler):
             elif self.decay_style == self.DECAY_STYLES[2]:
                 #TODO: implement exponential decay
                 return self.start_lr
+            elif self.decay_style == self.DECAY_STYLES[5]:
+                return self.start_lr / math.sqrt(self.num_iters)
             else:
                 return self.start_lr
 

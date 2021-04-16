@@ -3,3 +3,4 @@ upload.sh
 results/
 results-local
 __pycache__
+*.so

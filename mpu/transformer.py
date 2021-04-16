@@ -158,9 +158,9 @@ class GPT2ParallelSelfAttention(torch.nn.Module):
 
 @torch.jit.script
 def gelu_impl(x):
-     """OpenAI's gelu implementation."""
-     return 0.5 * x * (1.0 + torch.tanh(0.7978845608028654 * x *
-                                        (1.0 + 0.044715 * x * x)))
+    """OpenAI's gelu implementation."""
+    return 0.5 * x * (1.0 + torch.tanh(0.7978845608028654 * x *
+                                       (1.0 + 0.044715 * x * x)))
 
 def gelu(x):
     return gelu_impl(x)
@@ -309,6 +309,7 @@ def unscaled_init_method(sigma):
 def scaled_init_method(sigma, num_layers):
     """Init method based on N(0, sigma/sqrt(2*num_layers)."""
     std = sigma / math.sqrt(2.0 * num_layers)
+    
     def init_(tensor):
         return torch.nn.init.normal_(tensor, mean=0.0, std=std)
 
@@ -369,6 +370,7 @@ class GPT2ParallelTransformer(torch.nn.Module):
         if use_scaled_init_for_output_weights:
             output_layer_init_method = scaled_init_method(init_method_std,
                                                           num_layers)
+        
         def get_layer():
             return GPT2ParallelTransformerLayer(
                 hidden_size,

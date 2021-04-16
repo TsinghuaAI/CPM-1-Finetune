@@ -166,7 +166,7 @@ class ParallelEmbedding(torch.nn.Module):
         self.weight = Parameter(torch.Tensor(self.num_embeddings,
                                              self.embedding_dim_per_partition))
         self.weight.model_parallel = True
-        # And initialize.
+        # And initialize. split the weights to different model parallel devices
         _initialize_affine_weight(
             self.weight, self.num_embeddings, self.embedding_dim,
             self.embedding_dim_per_partition, 1, init_method,
@@ -184,6 +184,8 @@ class ParallelEmbedding(torch.nn.Module):
 
 class ColumnParallelLinear(torch.nn.Module):
     """Linear layer with column parallelism.
+
+    NOTE: This function will NOT do all-reduce unless gather_output is True
 
     The linear layer is defined as Y = XA + b. A is parallelized along
     its second dimension as A = [A_1, ..., A_p].
@@ -251,6 +253,8 @@ class ColumnParallelLinear(torch.nn.Module):
 
 class RowParallelLinear(torch.nn.Module):
     """Linear layer with row parallelism.
+
+    NOTE: This function will do all-reduce
 
     The linear layer is defined as Y = XA + b. A is parallelized along
     its first dimension and X along its second dimension as:
@@ -324,4 +328,3 @@ class RowParallelLinear(torch.nn.Module):
         else:
             output = output_
         return output
-

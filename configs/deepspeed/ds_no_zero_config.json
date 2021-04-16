@@ -1,0 +1,9 @@
+{
+  "train_micro_batch_size_per_gpu": 4,
+  "gradient_accumulation_steps": 2,
+  "steps_per_print": 10,
+  "gradient_clipping": 1.0,
+  "checkpoint_activations": false,
+  "checkpoint_num_layers": 1,
+  "wall_clock_breakdown": false
+}

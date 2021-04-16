@@ -39,7 +39,7 @@ def _build_key_size_numel_dictionaries(keys, data):
     if get_model_parallel_rank() == 0:
         offset = 0
         for key in keys:
-            assert data[key].dim() < max_dim, 'you should increase MAX_DATA_DIM, {} < {}, {}'.format(data[key].dim(), max_dim, key)
+            assert data[key].dim() < max_dim, 'you should increase MAX_DATA_DIM'
             size = data[key].size()
             for i, s in enumerate(size):
                 sizes[i + offset] = s

@@ -62,9 +62,6 @@ class GPT2Model(torch.nn.Module):
         self.word_embeddings = mpu.VocabParallelEmbedding(
             vocab_size, hidden_size, init_method=init_method)
 
-        # self.cls = mpu.VocabParallelEmbedding(
-        #     1024, hidden_size, init_method=init_method)
-
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(max_sequence_length,
                                                       hidden_size)
@@ -108,24 +105,14 @@ class GPT2Model(torch.nn.Module):
         return mpu.gather_from_model_parallel_region(logits_parallel)
 
 
-def judge_name(name):
-    if "embedding" in name:
-        return False
-    for i in range(28):
-        if str(i) in name:
-            return False
-    return True
-
 def gpt2_get_params_for_weight_decay_optimization(module):
 
     weight_decay_params = {'params': []}
     no_weight_decay_params = {'params': [], 'weight_decay': 0.0}
-    for name, module_ in module.named_modules():
-        # if not judge_name(name):
-        #     continue
+    for module_ in module.modules():
         if isinstance(module_, (mpu.LayerNorm, torch.nn.LayerNorm)):
             no_weight_decay_params['params'].extend(
-                [p for n, p in list(module_._parameters.items())
+                [p for p in list(module_._parameters.values())
                  if p is not None])
         else:
             weight_decay_params['params'].extend(
@@ -135,5 +122,4 @@ def gpt2_get_params_for_weight_decay_optimization(module):
                 [p for n, p in list(module_._parameters.items())
                  if p is not None and n == 'bias'])
 
-    print(len(weight_decay_params['params']), len(no_weight_decay_params['params']))
     return weight_decay_params, no_weight_decay_params

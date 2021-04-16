@@ -51,3 +51,6 @@ from .transformer import BertParallelSelfAttention
 from .transformer import BertParallelTransformerLayer
 from .transformer import GPT2ParallelTransformer
 from .transformer import LayerNorm
+
+from .transformer_enc_dec import ParallelTransformer
+

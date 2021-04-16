@@ -16,13 +16,8 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-import sys
 import json
-import logging
-import os
-import regex as re
 from io import open
-import sentencepiece as spm
 import jieba
 import collections
 import six
@@ -35,6 +30,7 @@ except ImportError:
     # because honestly I don't want to support a byte-level unicode BPE tokenizer on python 2 right now.
     def lru_cache():
         return lambda func: func
+
 
 def convert_to_unicode(text):
   """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
@@ -55,6 +51,7 @@ def convert_to_unicode(text):
   else:
     raise ValueError("Not running on Python2 or Python 3?")
 
+
 def load_vocab(vocab_file):
   """Loads a vocabulary file into a dictionary."""
   vocab = collections.OrderedDict()
@@ -69,6 +66,7 @@ def load_vocab(vocab_file):
       index += 1
   return vocab
 
+
 class WordpieceTokenizer(object):
 
     def __init__(self, vocab, unk_token="<unk>", max_input_chars_per_word=200):
@@ -82,9 +80,8 @@ class WordpieceTokenizer(object):
 
         chars = list(token)
         if len(chars) > self.max_input_chars_per_word:
-            return self.unk_token
+            return [self.unk_token]
 
-        is_bad = False
         start = 0
         sub_tokens = []
         while start < len(chars):
@@ -97,19 +94,18 @@ class WordpieceTokenizer(object):
                     break
                 end -= 1
             if cur_substr is None:
-                is_bad = True
-                break
+                sub_tokens.append(self.unk_token)
+                start += 1
+                continue
             sub_tokens.append(cur_substr)
             start = end
 
-        if is_bad:
-            return self.unk_token
-        else:
-            return sub_tokens
+        return sub_tokens
 
-class GPT2Tokenizer(object):
 
-    def __init__(self, vocab_file, max_len=None):
+class EncDecTokenizer(object):
+
+    def __init__(self, vocab_file, max_len=None, max_sentinels=190):
         self.max_len = max_len if max_len is not None else int(1e12)
         self.encoder = load_vocab(vocab_file)
         self.decoder = {v:k for k,v in self.encoder.items()}
@@ -117,7 +113,7 @@ class GPT2Tokenizer(object):
 
         self.translator = str.maketrans(" \n", "\u2582\u2583")
 
-        self.eod_id = self.encoder['<eod>']
+        self.sentinel_list = [self.encoder['<s_{}>'.format(i)] for i in range(max_sentinels)]
 
     @property
     def vocab_size(self):
@@ -127,8 +123,26 @@ class GPT2Tokenizer(object):
         return len(self.encoder)
 
     @property
-    def eod(self):
-        return self.eod_id
+    def eod_id(self):
+        return self.encoder[self.eod_token]
+
+    @property
+    def pad_id(self):
+        return self.encoder[self.pad_token]
+
+    @property
+    def eod_token(self):
+        return '<eod>'
+
+    @property
+    def pad_token(self):
+        return '<pad>'
+
+    def get_sentinel_num(self):
+        return len(self.sentinel_list)
+
+    def get_sentinel_id(self, idx):
+        return self.sentinel_list[idx]
 
     def tokenize(self, text):
         """ Tokenize a string. """
@@ -136,7 +150,6 @@ class GPT2Tokenizer(object):
         for x in jieba.cut(text, cut_all=False):
             x = x.translate(self.translator)
             output_tokens.extend(self.wordpiece_tokenizer.tokenize(x))
-        # print(output_tokens)
         return output_tokens
 
     def encode(self, text):
@@ -147,4 +160,3 @@ class GPT2Tokenizer(object):
         text = ''.join([self.decoder[x] for x in tokens])
         text = text.replace('\u2582', ' ').replace('\u2583', '\n')
         return text
-

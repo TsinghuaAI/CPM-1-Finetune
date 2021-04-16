@@ -1,0 +1,17 @@
+{
+  "d_model": 256,
+  "d_ff": 1024,
+  "d_kv": 16,
+  "num_layers": 24,
+  "num_heads": 16,
+  "num_decoder_layers": 24,
+  "dropout_rate": 0.1,
+  "feed_forward_proj": "relu",
+  "init_method_std": 0.02,
+  "initializer_factor": 1.0,
+  "layer_norm_epsilon": 1e-06,
+  "max_position_embeddings": 1024,
+  "relative_attention_num_buckets": 32,
+  "use_cache": true,
+  "use_scaled_init_for_output_weights": true
+}
