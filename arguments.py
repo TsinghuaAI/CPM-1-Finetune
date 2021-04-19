@@ -103,6 +103,10 @@ def add_training_args(parser: argparse.ArgumentParser):
 
     group = parser.add_argument_group('train', 'training configurations')
 
+    group.add_argument('--do_train', action="store_true")
+    group.add_argument('--do_valid', action="store_true")
+    group.add_argument('--do_eval', action="store_true")
+    group.add_argument('--epochs', type=int, default=1)
     group.add_argument('--batch-size', type=int, default=4,
                        help='Data Loader batch size')
     group.add_argument('--weight-decay', type=float, default=0.01,
@@ -246,6 +250,7 @@ def add_data_args(parser: argparse.ArgumentParser):
     #                   'for training.')
     group.add_argument('--data-path', type=str, default=None,
                         help='Path to combined dataset to split.')
+    group.add_argument('--data-ext', type=str, default=".json")
 
     group.add_argument('--use-npy-data-loader', action='store_true',
                        help='Use the numpy data loader. If set, then'
