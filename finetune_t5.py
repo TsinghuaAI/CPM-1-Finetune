@@ -267,7 +267,8 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
             if global_step % args.log_interval == 0:
                 learning_rate = optimizer.param_groups[0]['lr']
                 avg_lm_loss = total_loss / args.log_interval
-                log_string = ' global iteration {:8d}/{:8d} |'.format(global_step, args.train_iters)
+                log_string = ' epoch {:8d}/{:8d} |'.format(e, args.epochs)
+                log_string += ' global iteration {:8d}/{:8d} |'.format(global_step, args.train_iters)
                 log_string += ' learning rate {:.3} |'.format(learning_rate)
                 log_string += ' lm loss {:.6} |'.format(avg_lm_loss)
                 if args.fp16:
@@ -296,6 +297,53 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
 
 
 def evaluate(args, tokenizer, eval_data_loader, model, device, mode='dev'):
+    """Evaluation."""
+
+    # Turn on evaluation mode which disables dropout.
+    model.eval()
+
+    total_loss = 0.0
+    step = 0
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for model_batch, no_model_batch in eval_data_loader:
+            loss, logits = forward_step(args, model_batch, no_model_batch, model, device)
+
+            total_loss += loss.item()
+
+            logits_list = [torch.zeros_like(logits) for _ in range(mpu.get_model_parallel_world_size())]
+            torch.distributed.all_gather(logits_list, logits, mpu.get_model_parallel_group())
+
+            gathered_logits = torch.cat(logits_list, dim=-1)
+
+            pred_token_logits = gathered_logits[:, 1, :]
+            preds = torch.argmax(pred_token_logits, dim=-1)
+            labels = no_model_batch["labels"][:, 1]
+            
+            gathered_preds = [torch.zeros_like(preds) for _ in range(mpu.get_data_parallel_world_size())]
+            gathered_labels = [torch.zeros_like(labels) for _ in range(mpu.get_data_parallel_world_size())]
+
+            torch.distributed.all_gather(gathered_preds, preds.contiguous(), mpu.get_data_parallel_group())
+            torch.distributed.all_gather(gathered_labels, labels.contiguous(), mpu.get_data_parallel_group())
+
+            all_preds.extend(gathered_preds)
+            all_labels.extend(gathered_labels)
+
+            step += 1
+
+    total_loss /= step
+
+    all_preds = torch.cat(all_preds, dim=0)
+    all_labels = torch.cat(all_labels, dim=0)
+
+    acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+
+    return total_loss, acc
+
+def evaluate_gen(args, tokenizer, eval_data_loader, model, device, mode="dev"):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.

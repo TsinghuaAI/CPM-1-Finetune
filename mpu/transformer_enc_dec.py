@@ -197,14 +197,6 @@ class ParallelAttention(nn.Module):
                                        init_method=output_layer_init_method)
         self.output_dropout = nn.Dropout(config.dropout_rate)
 
-        # NOTE: This is a hack for our 130 training head.
-        # self.do_dim_trick = config.do_dim_trick
-        # if self.do_dim_trick:
-        #     if torch.distributed.get_rank() % 5 == 4:
-        #         self.head_mask = nn.Parameter(torch.tensor([1.0] * 12 + [0.0]), requires_grad=False)
-        #     else:
-        #         self.head_mask = nn.Parameter(torch.tensor([1.0] * 13), requires_grad=False)
-
         if deepspeed.checkpointing.is_configured():
             global get_cuda_rng_tracker, checkpoint
             get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
@@ -357,6 +349,11 @@ class ParallelAttention(nn.Module):
                 )
             else:
                 position_bias = self.compute_bias(real_seq_length, key_length)
+            
+            # if key and values are already calculated
+            # we want only the last query position bias
+            if past_key_value is not None:
+                position_bias = position_bias[:, :, -seq_length:, :]
 
         # Apply the attention mask [b, 1, s_q, s_k] and relative position_bias
         # NOTE: 10000 can't be larger otherwise may cause fp16 overflow (max in fp16 = 65504)
@@ -387,7 +384,7 @@ class ParallelAttention(nn.Module):
         # attn_output: [b, s, d_model]
         attn_output = self.output_dropout(attn_output)
 
-        present_key_value_state = (key_layer, value_layer) if self.is_decoder else None
+        present_key_value_state = torch.stack((key_layer, value_layer), dim=0) if self.is_decoder else None
         outputs = (attn_output,) + (present_key_value_state,) + (position_bias,)
 
         return outputs  # attn_output, present_key_value_state, position_bias
@@ -542,8 +539,8 @@ class ParallelBlock(nn.Module):
         past_key_value=None,):
 
         if past_key_value is not None:
-            self_attn_past_key_value = past_key_value[:2]
-            cross_attn_past_key_value = past_key_value[2:]
+            self_attn_past_key_value = past_key_value[0]
+            cross_attn_past_key_value = past_key_value[1]
         else:
             self_attn_past_key_value, cross_attn_past_key_value = None, None
 
@@ -553,13 +550,15 @@ class ParallelBlock(nn.Module):
             position_bias=position_bias,
             past_key_value=self_attn_past_key_value,
         )
-        hidden_states, present_key_value_state = self_attn_outputs[:2]
+        hidden_states, self_attn_present_key_value = self_attn_outputs[:2]
         attention_outputs = self_attn_outputs[2:] # position_bias
+
+        present_key_value = (self_attn_present_key_value,)
 
         # cross attn
         if self.is_decoder:
-            if present_key_value_state is not None:
-                query_length = present_key_value_state[0].shape[2]
+            if self_attn_present_key_value is not None:
+                query_length = self_attn_present_key_value[0].shape[2]
             else:
                 query_length = None
 
@@ -572,22 +571,20 @@ class ParallelBlock(nn.Module):
                 query_length=query_length,
             )
 
-            hidden_states = cross_attn_outputs[0]
-            # Combine self attn and cross attn key value states
-            if present_key_value_state is not None:
-                present_key_value_state = present_key_value_state + cross_attn_outputs[1]
-
+            hidden_states, cross_attn_present_key_value = cross_attn_outputs[:2]
+            present_key_value += (cross_attn_present_key_value,)
             # Keep cross-attention outputs and relative position weights
             attention_outputs = attention_outputs + cross_attn_outputs[2:]
 
         hidden_states = self.ff(hidden_states)
         outputs = (hidden_states,)
 
-        outputs = outputs + (present_key_value_state,) + attention_outputs
+        outputs = outputs + (present_key_value,) + attention_outputs
 
         # (for encoder) hidden_states, present_key_value_states, self-attention position bias
         # (for decoder) hidden_states, present_key_value_states, self-attention position bias, cross-attention position bias
         return outputs
+
 
 class ParallelTransformer(nn.Module):
     def __init__(self, config: EncDecConfig, word_embeds: VocabParallelEmbedding, is_decoder=False, checkpoint_activations=False, checkpoint_num_layers=1):
@@ -651,7 +648,8 @@ class ParallelTransformer(nn.Module):
             def custom_forward(*inputs):                
                 layer_modules_ = self.blocks[start:end]
                 past_key_values_ = past_key_values[start:end]
-                present_key_values_ = []
+                self_attn_present_key_values_ = []
+                cross_attn_present_key_values_ = []
                 position_bias_, enc_dec_position_bias_ = None, None
 
                 hidden_states_ = inputs[0]
@@ -675,17 +673,25 @@ class ParallelTransformer(nn.Module):
                                             past_key_value=past_key_value_)
                     
                     hidden_states_, present_key_value_ = layer_outputs_[:2]
+                    if self.is_decoder:
+                        self_attn_present_key_values_.append(present_key_value_[0])
+                        cross_attn_present_key_values_.append(present_key_value_[1])
+                    else:
+                        self_attn_present_key_values_.append(present_key_value_[0])
 
                     position_bias_ = layer_outputs_[2]
                     if self.is_decoder and enc_hidden_states is not None:
                         enc_dec_position_bias_ = layer_outputs_[3]
-
+                
                 outputs_ = (hidden_states_,)
                 if position_bias_ is not None:
                     outputs_ += (position_bias_,)
                 if enc_dec_position_bias_ is not None:
                     outputs_ += (enc_dec_position_bias_,)
-
+                if self.is_decoder:
+                    self_attn_present_key_values_ = torch.stack(self_attn_present_key_values_, dim=0)
+                    cross_attn_present_key_values_ = torch.stack(cross_attn_present_key_values_, dim=0)
+                    outputs_ += (self_attn_present_key_values_, cross_attn_present_key_values_,)
                 return outputs_
             
             return custom_forward
@@ -709,13 +715,18 @@ class ParallelTransformer(nn.Module):
                     tmp_outputs = checkpoint(custom(l, l+chunk_length), *arg_list)
                 
                 hidden_states = tmp_outputs[0]
-                if len(tmp_outputs) > 1:
-                    position_bias = tmp_outputs[1]
-                if len(tmp_outputs) > 2:
-                    enc_dec_position_bias = tmp_outputs[2]
-
-                # NOTE: we didn't consider present_key_value_states and all_hidden_states
-                present_key_value_states.extend([None] * chunk_length)
+                if self.is_decoder:
+                    if len(tmp_outputs) > 3:
+                        position_bias = tmp_outputs[1]
+                    if len(tmp_outputs) > 4:
+                        enc_dec_position_bias = tmp_outputs[2]
+                    present_key_value_states.extend([(s, c) for s, c in zip(tmp_outputs[-2], tmp_outputs[-1])])
+                else:
+                    if len(tmp_outputs) > 1:
+                        position_bias = tmp_outputs[1]
+                    if len(tmp_outputs) > 2:
+                        enc_dec_position_bias = tmp_outputs[2]
+                    present_key_value_states.extend([None] * chunk_length)            
                 
                 l += chunk_length
         else:

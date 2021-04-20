@@ -55,22 +55,36 @@ class EncDecModel(nn.Module):
         dec_input_ids=None,
         dec_position_ids=None,
         dec_attention_mask=None,
-        cross_attention_mask=None,):
+        cross_attention_mask=None,
+        enc_hidden_states=None,
+        past_key_values=None,
+        only_encoder=False):
 
-        enc_outputs = self.encoder(
-            input_ids=enc_input_ids,
-            position_ids=enc_position_ids,
-            attention_mask=enc_attention_mask,
-        )
+        if enc_hidden_states is None:
+            enc_outputs = self.encoder(
+                input_ids=enc_input_ids,
+                position_ids=enc_position_ids,
+                attention_mask=enc_attention_mask,
+            )
 
-        enc_hidden_states = enc_outputs["last_hidden_state"]
+            enc_hidden_states = enc_outputs["last_hidden_state"]
+
+        if only_encoder:
+            outputs = {
+                "encoder_last_hidden_state": enc_hidden_states,
+                "encoder_hidden_states": enc_outputs["hidden_states"],
+                "encoder_attentions": enc_outputs["attentions"],
+            }
+
+            return outputs
 
         dec_outputs = self.decoder(
             input_ids=dec_input_ids,
             position_ids=dec_position_ids,
             attention_mask=dec_attention_mask,
             cross_attention_mask=cross_attention_mask,
-            enc_hidden_states=enc_hidden_states
+            enc_hidden_states=enc_hidden_states,
+            past_key_values=past_key_values,
         )
 
         last_hidden_state_parallel = mpu.copy_to_model_parallel_region(dec_outputs["last_hidden_state"])

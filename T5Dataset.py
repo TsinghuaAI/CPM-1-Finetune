@@ -11,6 +11,7 @@ class T5Dataset(Dataset):
         self.tokenizer = tokenizer
         self.ratio = ratio
         self.path = path
+        self.pad_id = tokenizer.pad_id
         self.data, self.max_enc_len, self.max_dec_len = self.process_data()
 
     def process_data(self):
@@ -57,10 +58,8 @@ class T5Dataset(Dataset):
 class TNewsDataset(T5Dataset):
     def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
         super(TNewsDataset, self).__init__(args, tokenizer, path, ratio)
-        self.tokenizer = tokenizer
-        self.args = args
 
-        self.pad_id = self.tokenizer.pad_id
+    def process_data(self):
 
         self.label_word_map = {
             "100": "故事",
@@ -80,7 +79,6 @@ class TNewsDataset(T5Dataset):
             "116": "游戏"            
         }
 
-    def process_data(self):
         data = []
         enc_sizes = []
         dec_sizes = []
@@ -91,6 +89,45 @@ class TNewsDataset(T5Dataset):
         for line in tqdm(lines[:int(self.ratio * len(lines))], disable=(torch.distributed.get_rank() != 0), desc="loading Dataset"):
             d = json.loads(line)
             context = self.tokenizer.encode(d["sentence"])[:self.args.enc_seq_length]
+            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+            data.append({
+                "enc_input_ids": context,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+            enc_sizes.append(len(context))
+            dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class AFQMCDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(TNewsDataset, self).__init__(args, tokenizer, path, ratio)
+        self.tokenizer = tokenizer
+        self.args = args
+
+        self.pad_id = self.tokenizer.pad_id
+
+        self.label_word_map = {
+            "0": "不同",
+            "1": "相似"
+        }
+
+    def process_data(self):
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+        
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        
+        for line in tqdm(lines[:int(self.ratio * len(lines))], disable=(torch.distributed.get_rank() != 0), desc="loading Dataset"):
+            d = json.loads(line)
+            context = [39] + self.tokenizer.encode(d["sentence1"])[:self.args.enc_seq_length // 2 - 2] + [41, 62, 39] + self.tokenizer.encode(d["sentence2"])[:self.args.enc_seq_length // 2 - 3] + [41]
             target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
             data.append({
                 "enc_input_ids": context,
