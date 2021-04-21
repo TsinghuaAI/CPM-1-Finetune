@@ -99,12 +99,7 @@ class EncDecModel(nn.Module):
             "lm_logits": lm_logits,
             "last_hidden_state": dec_outputs["last_hidden_state"],
             "past_key_values": dec_outputs["past_key_values"],
-            "decoder_hidden_states": dec_outputs["hidden_states"],
-            "decoder_attentions": dec_outputs["attentions"],
-            "cross_attentions": dec_outputs["cross_attentions"],
-            "encoder_last_hidden_state": enc_outputs["last_hidden_state"],
-            "encoder_hidden_states": enc_outputs["hidden_states"],
-            "encoder_attentions": enc_outputs["attentions"],
+            "encoder_last_hidden_state": enc_hidden_states,
         }
 
         return outputs

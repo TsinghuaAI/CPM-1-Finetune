@@ -54,7 +54,7 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import TNewsDataset
+from T5Dataset import AFQMCDataset, OCNLIDataset, TNewsDataset
 
 import time
 
@@ -164,7 +164,7 @@ def get_learning_rate_scheduler(optimizer, args):
     return lr_scheduler
 
 
-def setup_model_and_optimizer(args, vocab_size):
+def setup_model_and_optimizer(args, vocab_size, ds_config):
     """Setup model and optimizer."""
 
     model = get_model(args, vocab_size)
@@ -180,7 +180,8 @@ def setup_model_and_optimizer(args, vocab_size):
             args=args,
             lr_scheduler=lr_scheduler,
             mpu=mpu,
-            dist_init_required=False
+            dist_init_required=False,
+            config_params=ds_config
         )
 
     print(args.load)
@@ -241,7 +242,7 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
     # Tracking loss.
     total_loss = 0.0
 
-    step, global_step = 0, 0
+    step, global_step = 1, 1
 
     for e in range(args.epochs):
         model.train()
@@ -264,10 +265,10 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
                     lr_scheduler.step()
 
             # Logging.
-            if global_step % args.log_interval == 0:
+            if global_step % args.log_interval == 0 and step % args.gradient_accumulation_steps == 0:
                 learning_rate = optimizer.param_groups[0]['lr']
-                avg_lm_loss = total_loss / args.log_interval
-                log_string = ' epoch {:8d}/{:8d} |'.format(e, args.epochs)
+                avg_lm_loss = total_loss / (args.log_interval * args.gradient_accumulation_steps)
+                log_string = 'epoch {:3d}/{:3d} |'.format(e, args.epochs)
                 log_string += ' global iteration {:8d}/{:8d} |'.format(global_step, args.train_iters)
                 log_string += ' learning rate {:.3} |'.format(learning_rate)
                 log_string += ' lm loss {:.6} |'.format(avg_lm_loss)
@@ -282,7 +283,7 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
                 save_checkpoint(global_step, model, optimizer, lr_scheduler, args)
 
             # Evaluation
-            if args.eval_interval and global_step % args.eval_interval == 0 and args.do_valid:
+            if args.eval_interval and global_step % args.eval_interval == 0 and step % args.gradient_accumulation_steps == 0 and args.do_valid:
                 prefix = 'iteration {} | '.format(global_step)
                 eval_loss, acc = evaluate(args, tokenizer, dev_dataloader, model, device, mode="dev")
                 log_string = prefix + " eval_loss: " + str(eval_loss) + " | eval acc: " + str(acc)
@@ -357,9 +358,25 @@ def evaluate_gen(args, tokenizer, eval_data_loader, model, device, mode="dev"):
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
-            loss, logits = forward_step(args, model_batch, no_model_batch, model, device)
+            loss, logits, enc_hidden_states = forward_step(args, model_batch, no_model_batch, model, device)
 
             total_loss += loss.item()
+
+            # for generating responses
+            # we only use the <go> token, so truncate other tokens
+            # dec_input_ids = model_batch['dec_input_ids'][..., :1]
+            # dec_attention_mask = model_batch['dec_attention_mask'][..., :1, :1]
+            # dec_position_ids = model_batch['dec_position_ids'][..., :1]
+            # # we use past_key_values, so only the current token mask is needed
+            # cross_attention_mask = model_batch['cross_attention_mask'][..., :1, :]
+
+            # unfinished_sents = enc_input_ids.new(enc_input_ids.size(0)).fill_(1)
+            # output_ids = enc_input_ids.new_zeros([enc_input_ids.size(0), 0])
+            # past_key_values = None
+
+            # gen_len = 0
+
+
 
             logits_list = [torch.zeros_like(logits) for _ in range(mpu.get_model_parallel_world_size())]
             torch.distributed.all_gather(logits_list, logits, mpu.get_model_parallel_group())
@@ -452,7 +469,12 @@ def set_random_seed(seed):
 
 def load_data(args, data_type, tokenizer, ratio=1):
     data_path = os.path.join(args.data_path, data_type + args.data_ext)
-    dataset = TNewsDataset(args, tokenizer, data_path, ratio=ratio)
+    data_cls = {
+        "tnews": TNewsDataset,
+        "afqmc": AFQMCDataset,
+        "ocnli": OCNLIDataset
+    }
+    dataset = data_cls[args.data_name](args, tokenizer, data_path, ratio=ratio)
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
@@ -511,13 +533,12 @@ def main():
     with open(args.deepspeed_config, "r") as f:
         ds_config = json.load(f)
 
-    args.gradient_accumulation_steps = ds_config["gradient_accumulation_steps"]
+    ds_config["gradient_accumulation_steps"] = args.gradient_accumulation_steps
+    ds_config["train_micro_batch_size_per_gpu"] = args.batch_size
 
     # Model, optimizer, and learning rate.
-    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size)
+    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config)
     device = torch.cuda.current_device()
-
-    print(optimizer.param_groups) 
 
     if args.do_train:
         train_dataloader, _ = load_data(args, 'train', tokenizer, ratio=1)

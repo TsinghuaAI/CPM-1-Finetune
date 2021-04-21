@@ -5,7 +5,7 @@
   "num_heads": 64,
   "num_layers": 24,
   "num_decoder_layers": 24,
-  "dropout_rate": 0.0,
+  "dropout_rate": 0.1,
   "feed_forward_proj": "relu",
   "init_method_std": 0.001,
   "initializer_factor": 1.0,

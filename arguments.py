@@ -109,6 +109,7 @@ def add_training_args(parser: argparse.ArgumentParser):
     group.add_argument('--epochs', type=int, default=1)
     group.add_argument('--batch-size', type=int, default=4,
                        help='Data Loader batch size')
+    group.add_argument('--gradient-accumulation-steps', type=int, default=1)
     group.add_argument('--weight-decay', type=float, default=0.01,
                        help='weight decay coefficient for L2 regularization')
     group.add_argument('--checkpoint-activations', action='store_true',
@@ -159,6 +160,8 @@ def add_training_args(parser: argparse.ArgumentParser):
                        help='Do not save current rng state.')
     group.add_argument('--load', type=str, default=None,
                        help='Path to a directory containing a model checkpoint.')
+    group.add_argument('--load-oprimizer-states', action="store_true")
+    group.add_argument('--load-lr-scheduler-states', action="store_true")
     group.add_argument('--no-load-optim', action='store_true',
                        help='Do not load optimizer when loading checkpoint.')
     group.add_argument('--no-load-rng', action='store_true',
@@ -251,7 +254,7 @@ def add_data_args(parser: argparse.ArgumentParser):
     group.add_argument('--data-path', type=str, default=None,
                         help='Path to combined dataset to split.')
     group.add_argument('--data-ext', type=str, default=".json")
-
+    group.add_argument('--data-name', type=str)
     group.add_argument('--use-npy-data-loader', action='store_true',
                        help='Use the numpy data loader. If set, then'
                        'train-data-path, val-data-path, and test-data-path'

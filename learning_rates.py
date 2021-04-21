@@ -26,7 +26,7 @@ class AnnealingLR(_LRScheduler):
     def __init__(self, optimizer, start_lr, warmup_iter, num_iters, decay_style=None, last_iter=-1, gradient_accumulation_steps=1):
         self.optimizer = optimizer
         self.start_lr = start_lr
-        self.warmup_iter = warmup_iter // gradient_accumulation_steps
+        self.warmup_iter = (warmup_iter // gradient_accumulation_steps) + 1
         self.num_iters = last_iter + 1
         self.end_iter = num_iters
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -51,7 +51,7 @@ class AnnealingLR(_LRScheduler):
                 #TODO: implement exponential decay
                 return self.start_lr
             elif self.decay_style == self.DECAY_STYLES[5]:
-                return self.start_lr / math.sqrt(self.num_iters)
+                return self.start_lr / math.sqrt(self.num_iters + 1)
             else:
                 return self.start_lr
 
