@@ -54,7 +54,9 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import AFQMCDataset, OCNLIDataset, TNewsDataset
+from T5Dataset import AFQMCDataset, CMNLIDataset, IFLYTEKDataset, OCNLIDataset, TNewsDataset
+
+import torch.nn.functional as F
 
 import time
 
@@ -193,20 +195,29 @@ def setup_model_and_optimizer(args, vocab_size, ds_config):
     return model, optimizer, lr_scheduler
 
 
-def forward_step(args, model_batch, no_model_batch, model, device):
+def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False):
     for k in model_batch:
         model_batch[k] = model_batch[k].to(device)
     for k in no_model_batch:
         no_model_batch[k] = no_model_batch[k].to(device)
 
-    output = model(**model_batch)
+    if keep_enc_hidden:
+        enc_outputs = model(**model_batch, only_encoder=True)
+        enc_hidden_states = enc_outputs["encoder_last_hidden_state"]
+        output = model(**model_batch, enc_hidden_states=enc_hidden_states)
+    else:
+        output = model(**model_batch)
+    
     logits = output["lm_logits"]
     losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(), no_model_batch["labels"])
     loss_mask = no_model_batch["loss_mask"]
     losses = (losses * loss_mask).sum(-1) / loss_mask.sum(-1)
     loss = losses.mean()
 
-    return loss, logits
+    if keep_enc_hidden:
+        return loss, logits, enc_hidden_states
+    else:
+        return loss, logits
 
 
 def backward_step(args, loss, model, optimizer):
@@ -232,9 +243,12 @@ def backward_step(args, loss, model, optimizer):
             else:
                 optimizer.clip_master_grads(args.clip_grad)
 
-def train(args, tokenizer, model, optimizer, lr_scheduler,
+
+def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
           train_dataloader, dev_dataloader, device):
     """Train the model."""
+
+    eval_func = data_config[args.data_name]["eval_func"]
 
     # Turn on training mode which enables dropout.
     model.train()
@@ -285,7 +299,7 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
             # Evaluation
             if args.eval_interval and global_step % args.eval_interval == 0 and step % args.gradient_accumulation_steps == 0 and args.do_valid:
                 prefix = 'iteration {} | '.format(global_step)
-                eval_loss, acc = evaluate(args, tokenizer, dev_dataloader, model, device, mode="dev")
+                eval_loss, acc = eval_func(args, tokenizer, dev_dataloader, model, device, mode="dev")
                 log_string = prefix + " eval_loss: " + str(eval_loss) + " | eval acc: " + str(acc)
                 print_rank_0(log_string)
                 save_rank_0(args, log_string)
@@ -297,7 +311,7 @@ def train(args, tokenizer, model, optimizer, lr_scheduler,
     return global_step
 
 
-def evaluate(args, tokenizer, eval_data_loader, model, device, mode='dev'):
+def evaluate(args, tokenizer: EncDecTokenizer, eval_data_loader, model, device, mode='dev'):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.
@@ -344,7 +358,36 @@ def evaluate(args, tokenizer, eval_data_loader, model, device, mode='dev'):
 
     return total_loss, acc
 
-def evaluate_gen(args, tokenizer, eval_data_loader, model, device, mode="dev"):
+
+def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
+    # This function has been mostly taken from huggingface conversational ai code at
+    # https://medium.com/huggingface/how-to-build-a-state-of-the-art-conversational-ai-with-transfer-learning-2d818ac26313
+
+    if top_k > 0:
+        # Remove all tokens with a probability less than the last token of the top-k
+        indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+        logits[indices_to_remove] = filter_value
+        
+    if top_p > 0.0:
+        #convert to 1D
+        logits=logits.view(logits.size()[1]).contiguous()
+        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+
+        # Remove tokens with cumulative probability above the threshold
+        sorted_indices_to_remove = cumulative_probs > top_p
+        # Shift the indices to the right to keep also the first token above the threshold
+        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+        sorted_indices_to_remove[..., 0] = 0
+        indices_to_remove = sorted_indices[sorted_indices_to_remove]
+        logits[indices_to_remove] = filter_value
+        #going back to 2D
+        logits=logits.view(1, -1).contiguous()
+
+    return logits
+
+
+def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, device, mode="dev"):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.
@@ -358,40 +401,71 @@ def evaluate_gen(args, tokenizer, eval_data_loader, model, device, mode="dev"):
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
-            loss, logits, enc_hidden_states = forward_step(args, model_batch, no_model_batch, model, device)
+            if torch.distributed.get_rank() == 0:
+                print(tokenizer.decode(model_batch["enc_input_ids"][0].cpu().tolist()))
+                print(tokenizer.decode(model_batch["dec_input_ids"][0].cpu().tolist()))
+                print(tokenizer.decode(no_model_batch["labels"][0].cpu().tolist()))
+            
+            loss, logits, enc_hidden_states = forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=True)
 
             total_loss += loss.item()
 
             # for generating responses
             # we only use the <go> token, so truncate other tokens
-            # dec_input_ids = model_batch['dec_input_ids'][..., :1]
-            # dec_attention_mask = model_batch['dec_attention_mask'][..., :1, :1]
-            # dec_position_ids = model_batch['dec_position_ids'][..., :1]
+            dec_input_ids = model_batch['dec_input_ids'][..., :1]
+            dec_attention_mask = model_batch['dec_attention_mask'][..., :1, :1]
             # # we use past_key_values, so only the current token mask is needed
-            # cross_attention_mask = model_batch['cross_attention_mask'][..., :1, :]
+            cross_attention_mask = model_batch['cross_attention_mask'][..., :1, :]
 
-            # unfinished_sents = enc_input_ids.new(enc_input_ids.size(0)).fill_(1)
-            # output_ids = enc_input_ids.new_zeros([enc_input_ids.size(0), 0])
-            # past_key_values = None
+            unfinished_sents = model_batch['enc_input_ids'].new(model_batch['enc_input_ids'].size(0)).fill_(1)
+            output_ids = model_batch['enc_input_ids'].new_zeros([model_batch['enc_input_ids'].size(0), 0])
+            past_key_values = None
 
-            # gen_len = 0
+            gen_len = 0
+            while gen_len < 10:
+                if unfinished_sents.max() == 0:
+                    tokens_to_add = tokenizer.pad_id * (1 - unfinished_sents)
+                    output_ids = torch.cat([output_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
 
+                else:
+                    if torch.distributed.get_rank() == 0:
+                        print(dec_input_ids)
 
+                    dec_outputs = model(
+                        dec_input_ids=dec_input_ids,
+                        dec_attention_mask=dec_attention_mask,
+                        cross_attention_mask=cross_attention_mask,
+                        enc_hidden_states=enc_hidden_states,
+                        past_key_values=past_key_values,
+                    )
+                    lm_logits = dec_outputs["lm_logits"]
+                    past_key_values = dec_outputs['past_key_values']
 
-            logits_list = [torch.zeros_like(logits) for _ in range(mpu.get_model_parallel_world_size())]
-            torch.distributed.all_gather(logits_list, logits, mpu.get_model_parallel_group())
+                    gathered_lm_logits = [torch.zeros_like(lm_logits).to(device) for _ in range(mpu.get_model_parallel_world_size())]
+                    torch.distributed.all_gather(gathered_lm_logits, lm_logits.data, mpu.get_model_parallel_group())
 
-            gathered_logits = torch.cat(logits_list, dim=-1)
+                    lm_logits = torch.cat(gathered_lm_logits, dim=-1)
 
-            pred_token_logits = gathered_logits[:, 1, :]
-            preds = torch.argmax(pred_token_logits, dim=-1)
-            labels = no_model_batch["labels"][:, 1]
+                    next_token_logits = lm_logits[:, -1, :]
+                    next_token = torch.argmax(next_token_logits, dim=-1)
+                    # next_token_logscores = top_k_logits(next_token_logits, top_k=args.top_k, top_p=args.top_p)
+                    # probs = F.softmax(next_token_logscores, dim=-1)
+                    # next_token = torch.multinomial(probs, num_samples=1).squeeze(1)
+                    tokens_to_add = next_token * unfinished_sents + tokenizer.pad_id * (1 - unfinished_sents)
+
+                    dec_input_ids = tokens_to_add.unsqueeze(-1)
+                    output_ids = torch.cat([output_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
+                    # let the current token attend to all previous tokens
+                    dec_attention_mask = torch.cat([dec_attention_mask, dec_attention_mask[:, :, :, -1:]], dim=-1)
+
+                gen_len += 1
+                unfinished_sents.mul_(tokens_to_add.ne(tokenizer.get_sentinel_id(1)).long())
             
-            gathered_preds = [torch.zeros_like(preds) for _ in range(mpu.get_data_parallel_world_size())]
-            gathered_labels = [torch.zeros_like(labels) for _ in range(mpu.get_data_parallel_world_size())]
+            gathered_preds = [torch.zeros_like(output_ids) for _ in range(mpu.get_data_parallel_world_size())]
+            gathered_labels = [torch.zeros_like(no_model_batch["labels"]) for _ in range(mpu.get_data_parallel_world_size())]
 
-            torch.distributed.all_gather(gathered_preds, preds.contiguous(), mpu.get_data_parallel_group())
-            torch.distributed.all_gather(gathered_labels, labels.contiguous(), mpu.get_data_parallel_group())
+            torch.distributed.all_gather(gathered_preds, output_ids, mpu.get_data_parallel_group())
+            torch.distributed.all_gather(gathered_labels, no_model_batch["labels"], mpu.get_data_parallel_group())
 
             all_preds.extend(gathered_preds)
             all_labels.extend(gathered_labels)
@@ -400,8 +474,11 @@ def evaluate_gen(args, tokenizer, eval_data_loader, model, device, mode="dev"):
 
     total_loss /= step
 
-    all_preds = torch.cat(all_preds, dim=0)
-    all_labels = torch.cat(all_labels, dim=0)
+    all_preds = torch.cat(all_preds, dim=0).cpu().tolist()
+    all_labels = torch.cat(all_labels, dim=0).cpu().tolist()
+
+    all_preds = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_preds]
+    all_labels = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_labels]
 
     acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
 
@@ -467,14 +544,10 @@ def set_random_seed(seed):
         mpu.model_parallel_cuda_manual_seed(seed)
 
 
-def load_data(args, data_type, tokenizer, ratio=1):
+def load_data(args, data_config, data_type, tokenizer, ratio=1):
     data_path = os.path.join(args.data_path, data_type + args.data_ext)
-    data_cls = {
-        "tnews": TNewsDataset,
-        "afqmc": AFQMCDataset,
-        "ocnli": OCNLIDataset
-    }
-    dataset = data_cls[args.data_name](args, tokenizer, data_path, ratio=ratio)
+
+    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, ratio=ratio)
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
@@ -540,12 +613,43 @@ def main():
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config)
     device = torch.cuda.current_device()
 
-    if args.do_train:
-        train_dataloader, _ = load_data(args, 'train', tokenizer, ratio=1)
-        dev_dataloader, _ = load_data(args, 'dev', tokenizer, ratio=1)
-        print("load data end")
-        train(args, tokenizer, model, optimizer, lr_scheduler, train_dataloader, dev_dataloader, device)
+    data_config = {
+        "tnews": {
+            "dataset": TNewsDataset,
+            "eval_func": evaluate
+        },
+        "afqmc": {
+            "dataset": AFQMCDataset,
+            "eval_func": evaluate
+        },
+        "ocnli": {
+            "dataset": OCNLIDataset,
+            "eval_func": evaluate
+        },
+        "iflytek": {
+            "dataset": IFLYTEKDataset,
+            "eval_func": evaluate_gen
+        },
+        "cmnli": {
+            "dataset": CMNLIDataset,
+            "eval_func": evaluate
+        }
+    }
 
+    if args.do_train:
+        train_dataloader, _ = load_data(args, data_config, 'train', tokenizer, ratio=1)
+        dev_dataloader, _ = load_data(args, data_config, 'dev', tokenizer, ratio=1)
+        train(args, data_config, tokenizer, model, optimizer, lr_scheduler, train_dataloader, dev_dataloader, device)
+
+    if args.do_eval:
+        eval_dataloader, _ = load_data(args, data_config, 'dev', tokenizer, ratio=1)
+        eval_func = data_config[args.data_name]["eval_func"]
+
+        loss, acc = eval_func(args, tokenizer, eval_dataloader, model, device, mode="test")
+
+        log_string = "Eval result: loss: {:.6} | acc: {:.4}".format(loss, acc)
+        print_rank_0(log_string)
+        save_rank_0(args, log_string)
 
 if __name__ == "__main__":
     main()

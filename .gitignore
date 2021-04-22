@@ -1,6 +1,7 @@
 .vscode/
 upload.sh
 results/
-results-local
+results-local/
+checkpoints/
 __pycache__
 *.so

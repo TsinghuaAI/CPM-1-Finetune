@@ -41,9 +41,9 @@ class T5Dataset(Dataset):
             enc_len, dec_len = len(samp["enc_input_ids"]), len(samp["dec_input_ids"])
             model_data["enc_input_ids"][i][:enc_len] = torch.tensor(samp["enc_input_ids"], dtype=torch.long)
             model_data["dec_input_ids"][i][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
-            model_data["enc_attention_mask"][0, :enc_len, :enc_len] = 1.0
-            model_data["dec_attention_mask"][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
-            model_data["cross_attention_mask"][0, :dec_len, :enc_len] = 1.0
+            model_data["enc_attention_mask"][i][0, :enc_len, :enc_len] = 1.0
+            model_data["dec_attention_mask"][i][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+            model_data["cross_attention_mask"][i][0, :dec_len, :enc_len] = 1.0
             no_model_data["labels"][i][:len(samp["label_ids"])] = torch.tensor(samp["label_ids"], dtype=torch.long)
             no_model_data["loss_mask"][i][:len(samp["label_ids"])] = 1.0
 
@@ -171,6 +171,80 @@ class AFQMCDataset(T5Dataset):
             })
             enc_sizes.append(len(context))
             dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class IFLYTEKDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, ratio)
+
+    def process_data(self):
+
+        self.label_word_map = {
+            "2": "免费wifi",
+            "23": "竞技游戏"
+        }
+    
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+        
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        
+        for line in tqdm(lines[:int(self.ratio * len(lines))], disable=(torch.distributed.get_rank() != 0), desc="loading Dataset"):
+            d = json.loads(line)
+            context = self.tokenizer.encode(d["sentence"])[:self.args.enc_seq_length]
+            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]] if d["label"] in self.label_word_map else d["label_des"]) + [self.tokenizer.get_sentinel_id(1)]
+            data.append({
+                "enc_input_ids": context,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+            enc_sizes.append(len(context))
+            dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class CMNLIDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(CMNLIDataset, self).__init__(args, tokenizer, path, ratio)
+
+    def process_data(self):
+
+        self.label_word_map = {
+            "entailment": "相似",
+            "contradiction": "矛盾",
+            "neutral": "中立"
+        }
+    
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+        
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        
+        for line in tqdm(lines[:int(self.ratio * len(lines))], disable=(torch.distributed.get_rank() != 0), desc="loading Dataset"):
+            d = json.loads(line)
+            if d["label"] in ["entailment", "contradiction", "neutral"]:
+                context = [39] + self.tokenizer.encode(d["sentence1"])[:self.args.enc_seq_length // 2 - 4] + [41, 62, 39] + self.tokenizer.encode(d["sentence2"])[:self.args.enc_seq_length // 2 - 4] + [41, 11, 1348, self.tokenizer.get_sentinel_id(0)]
+                target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+                data.append({
+                    "enc_input_ids": context,
+                    "dec_input_ids": target[:-1],
+                    "label_ids": target[1:]
+                })
+                enc_sizes.append(len(context))
+                dec_sizes.append(len(target) - 1)
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)

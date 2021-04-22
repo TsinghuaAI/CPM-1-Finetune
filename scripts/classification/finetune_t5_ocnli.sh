@@ -34,14 +34,14 @@ DATA_PATH="/mnt/sfs_turbo/data/CLUE/ocnli"
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_ocnli_lr0.0001/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_ocnli_lr0.00001/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 BATCH_SIZE=32
 GRAD_ACC=1
-LR=0.0001
+LR=0.00001
 TRAIN_ITER=20000
 EPOCHS=10
 
@@ -70,10 +70,10 @@ OPTS+=" --split 949,50,1"
 OPTS+=" --distributed-backend nccl"
 OPTS+=" --lr ${LR}"
 OPTS+=" --no-load-optim"
-OPTS+=" --lr-decay-style noam"
+OPTS+=" --lr-decay-style constant"
 OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
-OPTS+=" --warmup 0.1"
+OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
 OPTS+=" --save-interval 10000"
 OPTS+=" --eval-interval 100"

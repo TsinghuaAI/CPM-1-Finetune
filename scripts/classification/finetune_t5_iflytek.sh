@@ -29,18 +29,18 @@ MP_SIZE=4
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
-DATA_PATH="/mnt/sfs_turbo/data/CLUE/afqmc"
+DATA_PATH="/mnt/sfs_turbo/data/CLUE/iflytek"
 
-CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
+CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_afqmc_lr0.00001const_bs32_new/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_iflynek_lr0.00001_dropout/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
-BATCH_SIZE=16
-GRAD_ACC=2
+BATCH_SIZE=2
+GRAD_ACC=16
 LR=0.00001
 TRAIN_ITER=20000
 EPOCHS=10
@@ -62,7 +62,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name afqmc"
+OPTS+=" --data-name iflytek"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"
