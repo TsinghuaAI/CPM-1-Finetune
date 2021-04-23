@@ -401,10 +401,6 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, devi
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
-            if torch.distributed.get_rank() == 0:
-                print(tokenizer.decode(model_batch["enc_input_ids"][0].cpu().tolist()))
-                print(tokenizer.decode(model_batch["dec_input_ids"][0].cpu().tolist()))
-                print(tokenizer.decode(no_model_batch["labels"][0].cpu().tolist()))
             
             loss, logits, enc_hidden_states = forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=True)
 
@@ -428,9 +424,6 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, devi
                     output_ids = torch.cat([output_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
 
                 else:
-                    if torch.distributed.get_rank() == 0:
-                        print(dec_input_ids)
-
                     dec_outputs = model(
                         dec_input_ids=dec_input_ids,
                         dec_attention_mask=dec_attention_mask,

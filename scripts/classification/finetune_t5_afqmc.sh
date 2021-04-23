@@ -34,14 +34,14 @@ DATA_PATH="/mnt/sfs_turbo/data/CLUE/afqmc"
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_afqmc_lr0.00001const_bs32_new/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_afqmc_lr0.000005const_bs32_new/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 BATCH_SIZE=16
 GRAD_ACC=2
-LR=0.00001
+LR=0.000005
 TRAIN_ITER=20000
 EPOCHS=10
 

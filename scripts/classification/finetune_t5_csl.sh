@@ -34,7 +34,7 @@ DATA_PATH="/mnt/sfs_turbo/data/CLUE/csl"
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_csl_lr0.00001const/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_csl_lr0.000005const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
