@@ -1,5 +1,8 @@
+from os import POSIX_FADV_SEQUENTIAL, replace
+from preprocess_chid_finetune import process_one_sent
 import torch
 import json
+import re
 from tqdm import tqdm
 from torch._C import dtype
 from torch.utils.data import Dataset
@@ -245,6 +248,269 @@ class CMNLIDataset(T5Dataset):
                 })
                 enc_sizes.append(len(context))
                 dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class CSLDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(CSLDataset, self).__init__(args, tokenizer, path, ratio)
+
+    def process_data(self):
+
+        self.label_word_map = {
+            "0": "错误",
+            "1": "正确",
+        }
+    
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+        
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        
+        for line in tqdm(lines[:int(self.ratio * len(lines))], disable=(torch.distributed.get_rank() != 0), desc="loading Dataset"):
+            d = json.loads(line)
+            context = self.tokenizer.encode(d["abst"])
+            key_words = self.tokenizer.encode("关键词：")
+            for x in d["keyword"]:
+                key_words += self.tokenizer.encode(x) + [16]
+            key_words = key_words[:-1]
+            context = context[:self.args.enc_seq_length - len(key_words)] + key_words
+            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+            data.append({
+                "enc_input_ids": context,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+            enc_sizes.append(len(context))
+            dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+def cut_to_max_len(prefix, postfix, max_len):
+    if len(prefix) + len(postfix) <= max_len:
+        return prefix, postfix
+
+    overflow_num = len(prefix)  + len(postfix) - max_len
+
+    overflow_num_prefix = int((len(prefix) / (len(prefix) + len(postfix))) * overflow_num)
+    overflow_num_postfix = int((len(postfix) / (len(prefix) + len(postfix))) * overflow_num)
+        
+    if overflow_num_prefix + overflow_num_postfix < overflow_num:
+        if len(prefix) > len(postfix):
+            overflow_num_prefix += 1
+        else:
+            overflow_num_postfix += 1
+
+    assert overflow_num_prefix + overflow_num_postfix >= overflow_num, (overflow_num_prefix, overflow_num_postfix, overflow_num)
+
+    return prefix[overflow_num_prefix:], postfix[:len(postfix) - overflow_num_postfix]
+
+
+class CHIDDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(CHIDDataset, self).__init__(args, tokenizer, path, ratio)
+
+    def process_data(self):
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+
+        with open(self.path.replace(".json", "_answer.json"), "r") as f:
+            ans_d = json.load(f)
+
+        for line in tqdm(lines[:int(self.ratio * len(lines))], disable=(torch.distributed.get_rank() != 0), desc="loading Dataset"):
+            d = json.loads(line)
+            for sent in d["content"]:
+                samples, tmp_enc_sizes, tmp_dec_sizes = self.process_one_sent(sent, ans_d, d["candidates"])
+                data.extend(samples)
+                enc_sizes.extend(tmp_enc_sizes)
+                dec_sizes.extend(tmp_dec_sizes)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+    def process_one_sent(self, sent, answers, cands):
+        pattern = re.compile(r"#idiom\d+#")
+        start = 0
+        samples = []
+        enc_sizes, dec_sizes = [], []
+        cands_ids = self.tokenizer.encode("选项：")
+        for i, cand in enumerate(cands):
+            cands_ids.extend(self.tokenizer.encode(cand.strip()) + [16])
+
+        while True:
+            m = pattern.search(sent, start)
+            if m is None:
+                break
+            
+            context_ids = self.tokenizer.encode("上下文：")
+    
+            prefix = self.tokenizer.encode(re.sub(pattern, "", sent[:m.start()]))
+            postfix = self.tokenizer.encode(re.sub(pattern, "", sent[m.end():]))
+    
+            max_len = self.args.enc_seq_length - len(cands_ids) - len(context_ids) - 1
+            prefix, postfix = cut_to_max_len(prefix, postfix, max_len)
+            context_ids.extend(prefix + [self.tokenizer.get_sentinel_id(0)] + postfix)
+    
+            ids = cands_ids + context_ids
+    
+            assert len(ids) <= self.args.enc_seq_length, (len(ids), max_len, len(prefix), len(postfix))
+
+            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(cands[answers[m.group()]]) + [self.tokenizer.get_sentinel_id(1)]
+
+            samples.append({
+                "enc_input_ids": ids,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+
+            enc_sizes.append(len(ids))
+            dec_sizes.append(len(target) - 1)
+    
+            start = m.end()
+
+        return samples, enc_sizes, dec_sizes
+
+
+class CMRCDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(CMRCDataset, self).__init__(args, tokenizer, path, ratio)
+
+    def process_data(self):
+        with open(self.path, "r") as f:
+            jobj = json.load(f)["data"]
+
+        data = []
+        enc_sizes, dec_sizes = [], []
+
+        for dd in jobj[:int(self.ratio * len(jobj))]:
+            dd = dd["paragraphs"]
+            for d in dd:
+                context = d["context"]
+
+                for qa in d["qas"]:
+                    question_ids = self.tokenizer.encode(qa["question"])
+                    answer = ""
+                    answer_start = 0
+                    for x in qa["answers"]:
+                        if x["answer_start"] != -1:
+                            answer = x["text"]
+                            answer_start = x["answer_start"]
+                            break
+                        
+                    prefix = self.tokenizer.encode(context[:answer_start])
+                    postfix = self.tokenizer.encode(context[answer_start+len(answer):])
+
+                    fake_answer_ids = self.tokenizer.encode(context[answer_start:answer_start+len(answer)])
+                    answer_ids = self.tokenizer.encode(answer)
+                    enc_input_ids = self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("文章：")
+
+                    max_len = self.args.enc_seq_length - len(fake_answer_ids) - len(enc_input_ids)
+                    prefix, postfix = cut_to_max_len(prefix, postfix, max_len)
+
+                    enc_input_ids.extend(prefix + fake_answer_ids + postfix)
+                    target = [1, self.tokenizer.get_sentinel_id(0)] + answer_ids + [self.tokenizer.get_sentinel_id(1)]
+
+                    data.append({
+                        "enc_input_ids": enc_input_ids,
+                        "dec_input_ids": target[:-1],
+                        "label_ids": target[1:]
+                    })
+
+                    enc_sizes.append(len(enc_input_ids))
+                    dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class C3Dataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(C3Dataset, self).__init__(args, tokenizer, path, ratio)
+    
+    def process_data(self):
+        data = []
+        enc_sizes, dec_sizes = [], []
+        
+        with open(self.path, "r") as f:
+            jobj = json.load(f)
+
+        for d in jobj[:int(self.ratio * len(jobj))]:
+            context_ids = self.tokenizer.encode(d[0])
+            for qa in d[1]:
+                question_ids = self.tokenizer.encode(qa["question"])
+                choice_ids = []
+                for choice in qa["choice"]:
+                    choice_ids.extend(self.tokenizer.encode(choice) + [18])
+                answer_ids = self.tokenizer.encode(qa["answer"])
+                enc_input_ids = self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids + self.tokenizer.encode("文章：") + context_ids
+                # NOTE: This can be dangerous
+                enc_input_ids = enc_input_ids[:self.args.enc_seq_length]
+                target = [1 + self.tokenizer.get_sentinel_id(0)] + answer_ids + [self.tokenizer.get_sentinel_id(1)]
+
+                data.append({
+                    "enc_input_ids": enc_input_ids,
+                    "dec_input_ids": target[:-1],
+                    "label_ids": target[1:]
+                })
+
+                enc_sizes.append(len(enc_input_ids))
+                dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class WSCDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1):
+        super(WSCDataset, self).__init__(args, tokenizer, path, ratio)
+
+    def process_data(self):
+        data = []
+        enc_sizes, dec_sizes = [], []
+
+        self.label_map = {
+            "true": "正确",
+            "false": "错误"
+        }
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+
+        for line in lines[:int(self.ratio * len(lines))]:
+            d = json.loads(line)
+            context = d["text"]
+            context = context[:d["target"]["span2_index"]] + d["target"]["span1_text"] + context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):]
+            context = self.tokenizer.encode(context)
+            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_map[d["label"]])
+
+            data.append({
+                "enc_input_ids": context,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+
+            enc_sizes.append(len(context))
+            dec_sizes.append(len(target) - 1)
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)

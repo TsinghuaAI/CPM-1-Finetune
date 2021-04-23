@@ -54,7 +54,7 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import AFQMCDataset, CMNLIDataset, IFLYTEKDataset, OCNLIDataset, TNewsDataset
+from T5Dataset import AFQMCDataset, C3Dataset, CHIDDataset, CMNLIDataset, CMRCDataset, CSLDataset, IFLYTEKDataset, OCNLIDataset, TNewsDataset, WSCDataset
 
 import torch.nn.functional as F
 
@@ -632,6 +632,26 @@ def main():
         },
         "cmnli": {
             "dataset": CMNLIDataset,
+            "eval_func": evaluate
+        },
+        "csl": {
+            "dataset": CSLDataset,
+            "eval_func": evaluate
+        },
+        "chid": {
+            "dataset": CHIDDataset,
+            "eval_func": evaluate_gen
+        },
+        "cmrc": {
+            "dataset": CMRCDataset,
+            "eval_func": evaluate_gen
+        },
+        "c3": {
+            "dataset": C3Dataset,
+            "eval_func": evaluate_gen
+        },
+        "wsc": {
+            "dataset": WSCDataset,
             "eval_func": evaluate
         }
     }

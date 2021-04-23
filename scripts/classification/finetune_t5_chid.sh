@@ -29,19 +29,19 @@ MP_SIZE=4
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
-DATA_PATH="/mnt/sfs_turbo/data/CLUE/ocnli"
+DATA_PATH="/mnt/sfs_turbo/data/CLUE/chid"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_ocnli_lr0.000005/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_chid_lr0.00001const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
-BATCH_SIZE=32
-GRAD_ACC=1
-LR=0.000005
+BATCH_SIZE=4
+GRAD_ACC=8
+LR=0.00001
 TRAIN_ITER=20000
 EPOCHS=10
 
@@ -62,7 +62,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name ocnli"
+OPTS+=" --data-name chid"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"
