@@ -54,7 +54,7 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import AFQMCDataset, C3Dataset, CHIDDataset, CMNLIDataset, CMRCDataset, CSLDataset, IFLYTEKDataset, OCNLIDataset, TNewsDataset, WSCDataset
+from T5Dataset import AFQMCDataset, C3Dataset, CHIDDataset, CMNLIDataset, CMRCDataset, CSLDataset, CombinedDataset, IFLYTEKDataset, OCNLIDataset, TNewsDataset, WSCDataset
 
 import torch.nn.functional as F
 
@@ -540,7 +540,7 @@ def set_random_seed(seed):
 def load_data(args, data_config, data_type, tokenizer, ratio=1):
     data_path = os.path.join(args.data_path, data_type + args.data_ext)
 
-    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, ratio=ratio)
+    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, ratio=ratio, cache_path=data_config[args.data_name]["cache_path"])
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
@@ -609,43 +609,58 @@ def main():
     data_config = {
         "tnews": {
             "dataset": TNewsDataset,
-            "eval_func": evaluate
+            "eval_func": evaluate,
+            "cache_path": None
         },
         "afqmc": {
             "dataset": AFQMCDataset,
-            "eval_func": evaluate
+            "eval_func": evaluate,
+            "cache_path": None
         },
         "ocnli": {
             "dataset": OCNLIDataset,
-            "eval_func": evaluate
+            "eval_func": evaluate,
+            "cache_path": None
         },
         "iflytek": {
             "dataset": IFLYTEKDataset,
-            "eval_func": evaluate_gen
+            "eval_func": evaluate_gen,
+            "cache_path": None
         },
         "cmnli": {
             "dataset": CMNLIDataset,
-            "eval_func": evaluate
+            "eval_func": evaluate,
+            "cache_path": None
         },
         "csl": {
             "dataset": CSLDataset,
-            "eval_func": evaluate
+            "eval_func": evaluate,
+            "cache_path": None
         },
         "chid": {
             "dataset": CHIDDataset,
-            "eval_func": evaluate_gen
+            "eval_func": evaluate_gen,
+            "cache_path": args.data_path
         },
         "cmrc": {
             "dataset": CMRCDataset,
-            "eval_func": evaluate_gen
+            "eval_func": evaluate_gen,
+            "cache_path": None
         },
         "c3": {
             "dataset": C3Dataset,
-            "eval_func": evaluate_gen
+            "eval_func": evaluate_gen,
+            "cache_path": None
         },
         "wsc": {
             "dataset": WSCDataset,
-            "eval_func": evaluate
+            "eval_func": evaluate,
+            "cache_path": None
+        },
+        "combined": {
+            "dataset": CombinedDataset,
+            "eval_func": evaluate_gen,
+            "cache_path": args.data_path
         }
     }
 
