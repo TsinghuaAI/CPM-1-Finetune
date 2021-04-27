@@ -13,7 +13,7 @@ import pickle
 from utils import print_rank_0, save_rank_0
 
 class T5Dataset(Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
         self.args = args
         self.tokenizer = tokenizer
         self.ratio = ratio
@@ -23,11 +23,12 @@ class T5Dataset(Dataset):
         self.prefix_ids = self.tokenizer.encode(prefix) if prefix is not None else []
         self.enc_seq_length = args.enc_seq_length - len(self.prefix_ids)
         self.add_target_post=add_target_post
+        self.split = split
         if cache_path is not None:
             cache_path = os.path.join(cache_path, "cache_{}_{}.pkl".format(path.replace("/", "_"), ratio))
             if os.path.exists(cache_path):
                 with open(cache_path, "rb") as f:
-                    self.data, self.max_dec_len, self.max_dec_len = pickle.load(f)
+                    self.data, self.max_enc_len, self.max_dec_len = pickle.load(f)
             else:
                 self.data, self.max_enc_len, self.max_dec_len = self.process_data()
                 with open(cache_path, "wb") as f:
@@ -81,8 +82,8 @@ class T5Dataset(Dataset):
 
 
 class TNewsDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(TNewsDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(TNewsDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
 
@@ -113,7 +114,7 @@ class TNewsDataset(T5Dataset):
         
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
-            context = self.prefix_ids + self.tokenizer.encode(d["sentence"])[:self.enc_seq_length]
+            context = self.prefix_ids + (self.tokenizer.encode(d["keywords"].replace(",", "，")) + [12] + self.tokenizer.encode(d["sentence"]))[:self.enc_seq_length]
             target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
@@ -132,8 +133,8 @@ class TNewsDataset(T5Dataset):
 
 
 class OCNLIDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(OCNLIDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(OCNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
 
@@ -172,8 +173,8 @@ class OCNLIDataset(T5Dataset):
 
 
 class AFQMCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(AFQMCDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(AFQMCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
 
@@ -210,8 +211,8 @@ class AFQMCDataset(T5Dataset):
 
 
 class IFLYTEKDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
+        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
 
@@ -248,8 +249,8 @@ class IFLYTEKDataset(T5Dataset):
 
 
 class CMNLIDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CMNLIDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(CMNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
 
@@ -288,8 +289,8 @@ class CMNLIDataset(T5Dataset):
 
 
 class CSLDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CSLDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(CSLDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
 
@@ -351,8 +352,8 @@ def cut_to_max_len(prefix, postfix, max_len):
 
 
 class CHIDDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(CHIDDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
+        super(CHIDDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
         data = []
@@ -425,9 +426,98 @@ class CHIDDataset(T5Dataset):
         return samples, enc_sizes, dec_sizes
 
 
+class CHIDDataset2(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(CHIDDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+
+    def process_data(self):
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+
+        with open(self.path.replace(".json", "_answer.json"), "r") as f:
+            ans_d = json.load(f)
+
+        for line in lines[:int(self.ratio * len(lines))]:
+            d = json.loads(line)
+            for sent in d["content"]:
+                samples, tmp_enc_sizes, tmp_dec_sizes = self.process_one_sent(sent, ans_d, d["candidates"])
+                data.extend(samples)
+                enc_sizes.extend(tmp_enc_sizes)
+                dec_sizes.extend(tmp_dec_sizes)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+    def process_one_sent(self, sent, answers, cands):
+
+        number_map = [
+            50, # 一
+            230,
+            156,
+            349,
+            443,
+            803,
+            950,
+            1031, # 八
+            1189, # 九
+            1320
+        ]
+
+        pattern = re.compile(r"#idiom\d+#")
+        start = 0
+        samples = []
+        enc_sizes, dec_sizes = [], []
+        cands_ids = self.tokenizer.encode("选项：")
+        for i, cand in enumerate(cands):
+            cands_ids.extend([number_map[i], 20] + self.tokenizer.encode(cand.strip()) + [16])
+
+        while True:
+            m = pattern.search(sent, start)
+            if m is None:
+                break
+            
+            context_ids = self.tokenizer.encode("上下文：")
+    
+            prefix = self.tokenizer.encode(re.sub(pattern, "", sent[:m.start()]))
+            postfix = self.tokenizer.encode(re.sub(pattern, "", sent[m.end():]))
+    
+            max_len = self.enc_seq_length - len(cands_ids) - len(context_ids) - 1
+            prefix, postfix = cut_to_max_len(prefix, postfix, max_len)
+            context_ids.extend(prefix + [self.tokenizer.get_sentinel_id(0)] + postfix)
+    
+            ids = cands_ids + context_ids
+    
+            assert len(ids) <= self.enc_seq_length, (len(ids), max_len, len(prefix), len(postfix))
+
+            ids = self.prefix_ids + ids
+
+            target = [1, self.tokenizer.get_sentinel_id(0)] + [number_map[answers[m.group()]]]
+            if self.add_target_post:
+                target += [self.tokenizer.get_sentinel_id(1)]
+            
+            samples.append({
+                "enc_input_ids": ids,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+
+            enc_sizes.append(len(ids))
+            dec_sizes.append(len(target) - 1)
+    
+            start = m.end()
+
+        return samples, enc_sizes, dec_sizes
+
+
 class CMRCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(CMRCDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
+        super(CMRCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
         with open(self.path, "r") as f:
@@ -450,7 +540,8 @@ class CMRCDataset(T5Dataset):
                             answer = x["text"]
                             answer_start = x["answer_start"]
                             break
-                        
+                    all_answers = [x["text"] for x in qa["answers"]]
+
                     prefix = self.tokenizer.encode(context[:answer_start])
                     postfix = self.tokenizer.encode(context[answer_start+len(answer):])
 
@@ -469,7 +560,8 @@ class CMRCDataset(T5Dataset):
                     data.append({
                         "enc_input_ids": enc_input_ids,
                         "dec_input_ids": target[:-1],
-                        "label_ids": target[1:]
+                        "label_ids": target[1:],
+                        "truth": all_answers
                     })
 
                     enc_sizes.append(len(enc_input_ids))
@@ -480,10 +572,19 @@ class CMRCDataset(T5Dataset):
 
         return data, max_enc_len, max_dec_len
 
+    # def collate(self, samples):
+    #     model_data, no_model_data = super().collate(samples)
+    #     max_truth_len = max([len(s["truth"]) for s in samples])
+    #     no_model_data["truth"] = torch.ones(len(samples), max_truth_len, dtype=torch.long) * self.tokenizer.pad_id
+    #     for i, s in enumerate(samples):
+    #         no_model_data["truth"][i, :len(s["truth"])] = torch.tensor(s["truth"], dtype=torch.long)
+
+    #     return model_data, no_model_data
+
 
 class C3Dataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(C3Dataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
+        super(C3Dataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
     
     def process_data(self):
         data = []
@@ -503,7 +604,7 @@ class C3Dataset(T5Dataset):
                 enc_input_ids = self.prefix_ids + self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids + self.tokenizer.encode("文章：") + context_ids
                 # NOTE: This can be dangerous
                 enc_input_ids = enc_input_ids[:self.enc_seq_length]
-                target = [1 + self.tokenizer.get_sentinel_id(0)] + answer_ids
+                target = [1, self.tokenizer.get_sentinel_id(0)] + answer_ids
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
@@ -521,9 +622,60 @@ class C3Dataset(T5Dataset):
         return data, max_enc_len, max_dec_len
 
 
+class C3Dataset2(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(C3Dataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    
+    def process_data(self):
+        data = []
+        enc_sizes, dec_sizes = [], []
+        
+        number_map = [
+            50, # 一
+            230,
+            156,
+            349,
+            443,
+            803,
+            950,
+            1031 # 八
+        ]
+
+        with open(self.path, "r") as f:
+            jobj = json.load(f)
+
+        for d in jobj[:int(self.ratio * len(jobj))]:
+            context_ids = self.tokenizer.encode(d[0])
+            for qa in d[1]:
+                question_ids = self.tokenizer.encode(qa["question"])
+                choice_ids = []
+                for i, choice in enumerate(qa["choice"]):
+                    choice_ids.extend([number_map[i], 20] + self.tokenizer.encode(choice) + [18])
+                truth_id = number_map[qa["choice"].index(qa["answer"])]
+                enc_input_ids = self.prefix_ids + self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids + self.tokenizer.encode("文章：") + context_ids
+                # NOTE: This can be dangerous
+                enc_input_ids = enc_input_ids[:self.enc_seq_length]
+                target = [1, self.tokenizer.get_sentinel_id(0)] + [truth_id]
+                if self.add_target_post:
+                    target += [self.tokenizer.get_sentinel_id(1)]
+                data.append({
+                    "enc_input_ids": enc_input_ids,
+                    "dec_input_ids": target[:-1],
+                    "label_ids": target[1:],
+                })
+
+                enc_sizes.append(len(enc_input_ids))
+                dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
 class WSCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(WSCDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(WSCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
         data = []
@@ -561,8 +713,8 @@ class WSCDataset(T5Dataset):
 
 
 class CombinedDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CombinedDataset, self).__init__(args, tokenizer, path, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+        super(CombinedDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
 
     def process_data(self):
         
@@ -597,4 +749,46 @@ class CombinedDataset(T5Dataset):
         random.shuffle(data)
 
         return data, max_enc_len, max_dec_len
-           
+
+
+class WSCDataset2(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
+        super(WSCDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+
+    def process_data(self):
+        data = []
+        enc_sizes, dec_sizes = [], []
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+
+        for line in lines[:int(self.ratio * len(lines))]:
+            d = json.loads(line)
+            
+            if self.split in ["dev", "test"] or d["label"] == "true":
+                context = d["text"]
+                context = self.tokenizer.encode(context[:d["target"]["span2_index"]]) + [495] + self.tokenizer.encode(d["target"]["span2_text"]) + [495] + self.tokenizer.encode(context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):])
+                context = self.prefix_ids + context
+                target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(d["target"]["span1_text"])
+                if self.add_target_post:
+                    target += [self.tokenizer.get_sentinel_id(1)]
+                data.append({
+                    "enc_input_ids": context,
+                    "dec_input_ids": target[:-1],
+                    "label_ids": target[1:],
+                    "truth": 1 if d["label"] == "true" else 0
+                })
+
+                enc_sizes.append(len(context))
+                dec_sizes.append(len(target) - 1)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+    def collate(self, samples):
+        model_data, no_model_data = super().collate(samples)
+        no_model_data["truth"] = torch.tensor([s["truth"] for s in samples], dtype=torch.long)
+
+        return model_data, no_model_data

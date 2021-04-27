@@ -54,7 +54,7 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import AFQMCDataset, C3Dataset, CHIDDataset, CMNLIDataset, CMRCDataset, CSLDataset, CombinedDataset, IFLYTEKDataset, OCNLIDataset, TNewsDataset, WSCDataset
+from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CMNLIDataset, CMRCDataset, CSLDataset, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2
 
 import torch.nn.functional as F
 
@@ -245,7 +245,7 @@ def backward_step(args, loss, model, optimizer):
 
 
 def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
-          train_dataloader, dev_dataloader, device):
+          train_dataset, train_dataloader, dev_dataset, dev_dataloader, device):
     """Train the model."""
 
     eval_func = data_config[args.data_name]["eval_func"]
@@ -293,13 +293,13 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
                 total_loss = 0.0
 
             # Checkpointing
-            if args.save and args.save_interval and global_step % args.save_interval == 0:
+            if args.save and args.save_interval and global_step % args.save_interval == 0 and step % args.gradient_accumulation_steps == 0:
                 save_checkpoint(global_step, model, optimizer, lr_scheduler, args)
 
             # Evaluation
             if args.eval_interval and global_step % args.eval_interval == 0 and step % args.gradient_accumulation_steps == 0 and args.do_valid:
                 prefix = 'iteration {} | '.format(global_step)
-                eval_loss, acc = eval_func(args, tokenizer, dev_dataloader, model, device, mode="dev")
+                eval_loss, acc = eval_func(args, tokenizer, dev_dataset, dev_dataloader, model, device, mode="dev")
                 log_string = prefix + " eval_loss: " + str(eval_loss) + " | eval acc: " + str(acc)
                 print_rank_0(log_string)
                 save_rank_0(args, log_string)
@@ -311,7 +311,7 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
     return global_step
 
 
-def evaluate(args, tokenizer: EncDecTokenizer, eval_data_loader, model, device, mode='dev'):
+def evaluate(args, tokenizer: EncDecTokenizer, eval_dataset, eval_data_loader, model, device, mode='dev'):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.
@@ -387,7 +387,7 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
     return logits
 
 
-def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, device, mode="dev"):
+def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_dataset: T5Dataset, eval_data_loader, model, device, mode="dev"):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.
@@ -398,6 +398,7 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, devi
 
     all_preds = []
     all_labels = []
+    all_truth = []
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
@@ -418,7 +419,7 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, devi
             past_key_values = None
 
             gen_len = 0
-            while gen_len < 10:
+            while gen_len < args.dec_seq_length:
                 if unfinished_sents.max() == 0:
                     tokens_to_add = tokenizer.pad_id * (1 - unfinished_sents)
                     output_ids = torch.cat([output_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
@@ -463,6 +464,11 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, devi
             all_preds.extend(gathered_preds)
             all_labels.extend(gathered_labels)
 
+            if args.data_name in ["wsc2"]:
+                gathered_truth = [torch.zeros_like(no_model_batch["truth"]) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(gathered_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
+                all_truth.extend(gathered_truth)
+                
             step += 1
 
     total_loss /= step
@@ -473,9 +479,46 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_data_loader, model, devi
     all_preds = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_preds]
     all_labels = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_labels]
 
-    acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+    with open(os.path.join(args.save, "preds.txt"), "w") as f:
+        for p in all_preds:
+            f.write(tokenizer.decode(p) + "\n")
+    
+    with open(os.path.join(args.save, "labels.txt"), "w") as f:
+        for l in all_labels:
+            f.write(tokenizer.decode(l) + "\n")
+
+    if args.data_name in ["wsc2"]:
+        all_truth = torch.cat(all_truth, dim=0).cpu().tolist()
+        acc = wsc2_metric(tokenizer, all_preds, all_labels, all_truth)
+    elif args.data_name in ["cmrc"]:
+        acc = cmrc_metric(tokenizer, all_preds, eval_dataset.data)
+    else:
+        acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
 
     return total_loss, acc
+
+
+def wsc2_metric(tokenizer: EncDecTokenizer, all_preds, all_labels, all_truth):
+    all_preds = [p[1:-1] for p in all_preds]
+    all_labels = [l[1:-1] for l in all_labels]
+    res = []
+    for p, l, t in zip(all_preds, all_labels, all_truth):
+        p = tokenizer.decode(p)
+        l = tokenizer.decode(l)
+        pp = int((p in l) or (l in p))
+        res.append(int(pp == t))
+
+    acc = sum(res) / len(res)
+    return acc
+
+
+def cmrc_metric(tokenizer: EncDecTokenizer, all_preds, data):
+    print("Doing cmrc metric")        
+    all_preds = [tokenizer.decode(p[1:-1]) for p in all_preds]
+    res = [int(p in d["truth"]) for p, d in zip(all_preds, data)]
+
+    acc = sum(res) / len(res)
+    return acc
 
 
 def evaluate_and_print_results(tokenizer, prefix, data_iterator, model,
@@ -540,7 +583,7 @@ def set_random_seed(seed):
 def load_data(args, data_config, data_type, tokenizer, ratio=1):
     data_path = os.path.join(args.data_path, data_type + args.data_ext)
 
-    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, ratio=ratio, cache_path=data_config[args.data_name]["cache_path"])
+    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, data_type, ratio=ratio, prefix=args.data_prefix, cache_path=data_config[args.data_name]["cache_path"])
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
@@ -652,28 +695,43 @@ def main():
             "eval_func": evaluate_gen,
             "cache_path": None
         },
+        "c32": {
+            "dataset": C3Dataset2,
+            "eval_func": evaluate,
+            "cache_path": None
+        },
         "wsc": {
             "dataset": WSCDataset,
             "eval_func": evaluate,
             "cache_path": None
         },
+        "wsc2": {
+            "dataset": WSCDataset2,
+            "eval_func": evaluate_gen,
+            "cache_path": None
+        },
+        "chid2": {
+            "dataset": CHIDDataset2,
+            "eval_func": evaluate,
+            "cache_path": None
+        },
         "combined": {
             "dataset": CombinedDataset,
-            "eval_func": evaluate_gen,
+            "eval_func": evaluate,
             "cache_path": args.data_path
         }
     }
 
     if args.do_train:
-        train_dataloader, _ = load_data(args, data_config, 'train', tokenizer, ratio=1)
-        dev_dataloader, _ = load_data(args, data_config, 'dev', tokenizer, ratio=1)
-        train(args, data_config, tokenizer, model, optimizer, lr_scheduler, train_dataloader, dev_dataloader, device)
+        train_dataloader, train_dataset = load_data(args, data_config, 'train', tokenizer, ratio=1)
+        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, ratio=1)
+        train(args, data_config, tokenizer, model, optimizer, lr_scheduler, train_dataset, train_dataloader, dev_dataset, dev_dataloader, device)
 
     if args.do_eval:
-        eval_dataloader, _ = load_data(args, data_config, 'dev', tokenizer, ratio=1)
+        eval_dataloader, eval_dataset = load_data(args, data_config, 'dev', tokenizer, ratio=1)
         eval_func = data_config[args.data_name]["eval_func"]
 
-        loss, acc = eval_func(args, tokenizer, eval_dataloader, model, device, mode="test")
+        loss, acc = eval_func(args, tokenizer, eval_dataset, eval_dataloader, model, device, mode="test")
 
         log_string = "Eval result: loss: {:.6} | acc: {:.4}".format(loss, acc)
         print_rank_0(log_string)

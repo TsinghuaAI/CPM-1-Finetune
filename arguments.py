@@ -259,6 +259,7 @@ def add_data_args(parser: argparse.ArgumentParser):
                        help='Use the numpy data loader. If set, then'
                        'train-data-path, val-data-path, and test-data-path'
                        'should also be provided.')
+    group.add_argument('--data-prefix', type=str, default=None)
     group.add_argument('--train-data-path', type=str, default='',
                        help='path to the training data')
     group.add_argument('--val-data-path', type=str, default='',
