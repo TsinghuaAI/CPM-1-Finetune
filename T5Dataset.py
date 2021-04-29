@@ -10,10 +10,12 @@ from torch._C import dtype
 from torch.utils.data import Dataset
 from data_utils.tokenization_enc_dec import EncDecTokenizer
 import pickle
+import mpu
+import math
 from utils import print_rank_0, save_rank_0
 
 class T5Dataset(Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
         self.args = args
         self.tokenizer = tokenizer
         self.ratio = ratio
@@ -24,6 +26,8 @@ class T5Dataset(Dataset):
         self.enc_seq_length = args.enc_seq_length - len(self.prefix_ids)
         self.add_target_post=add_target_post
         self.split = split
+        self.do_infer = do_infer
+        self.idx = 0
         if cache_path is not None:
             cache_path = os.path.join(cache_path, "cache_{}_{}.pkl".format(path.replace("/", "_"), ratio))
             if os.path.exists(cache_path):
@@ -35,6 +39,14 @@ class T5Dataset(Dataset):
                     pickle.dump((self.data, self.max_enc_len, self.max_dec_len), f)
         else:
             self.data, self.max_enc_len, self.max_dec_len = self.process_data()
+
+        if do_infer:
+            total_eval_batch_size = mpu.get_data_parallel_world_size() * args.batch_size
+            total_data_num = math.ceil(len(self.data) / total_eval_batch_size) * total_eval_batch_size
+            while len(self.data) < total_data_num:
+                tmp = self.data[0].copy()
+                tmp["idx"] = -1
+                self.data.append(tmp)
 
         print_str = "Path: {} | Ratio:{} | Max enc len: {} | Max dec len: {} | Data num: {}".format(path, ratio, self.max_enc_len, self.max_dec_len, len(self.data))
         print_rank_0(print_str)
@@ -58,10 +70,16 @@ class T5Dataset(Dataset):
             "cross_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_enc_len),
             "dec_input_ids": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id
         }
-        no_model_data = {
-            "labels": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
-            "loss_mask": torch.zeros(bs, self.max_dec_len)
-        }
+        if not self.do_infer:
+            no_model_data = {
+                "idx": torch.zeros(bs, dtype=torch.long),
+                "labels": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
+                "loss_mask": torch.zeros(bs, self.max_dec_len)
+            }
+        else:
+            no_model_data = {
+                "idx": torch.zeros(bs, dtype=torch.long),
+            }
 
         for i, samp in enumerate(samples):
             enc_len, dec_len = len(samp["enc_input_ids"]), len(samp["dec_input_ids"])
@@ -70,8 +88,10 @@ class T5Dataset(Dataset):
             model_data["enc_attention_mask"][i][0, :enc_len, :enc_len] = 1.0
             model_data["dec_attention_mask"][i][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
             model_data["cross_attention_mask"][i][0, :dec_len, :enc_len] = 1.0
-            no_model_data["labels"][i][:len(samp["label_ids"])] = torch.tensor(samp["label_ids"], dtype=torch.long)
-            no_model_data["loss_mask"][i][:len(samp["label_ids"])] = 1.0
+            no_model_data["idx"][i] = samp["idx"]
+            if not self.do_infer:
+                no_model_data["labels"][i][:len(samp["label_ids"])] = torch.tensor(samp["label_ids"], dtype=torch.long)
+                no_model_data["loss_mask"][i][:len(samp["label_ids"])] = 1.0
 
         if self.args.fp16:
             model_data["enc_attention_mask"] = model_data["enc_attention_mask"].half()
@@ -82,8 +102,8 @@ class T5Dataset(Dataset):
 
 
 class TNewsDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(TNewsDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(TNewsDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
 
@@ -101,7 +121,7 @@ class TNewsDataset(T5Dataset):
             "112": "旅游",
             "113": "世界",
             "114": "股票",
-            "115": "建筑",
+            "115": "农业",
             "116": "游戏"            
         }
 
@@ -115,16 +135,18 @@ class TNewsDataset(T5Dataset):
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
             context = self.prefix_ids + (self.tokenizer.encode(d["keywords"].replace(",", "，")) + [12] + self.tokenizer.encode(d["sentence"]))[:self.enc_seq_length]
-            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             data.append({
+                "idx": d["id"] if self.do_infer else self.idx,
                 "enc_input_ids": context,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
             })
             enc_sizes.append(len(context))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -133,8 +155,8 @@ class TNewsDataset(T5Dataset):
 
 
 class OCNLIDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(OCNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(OCNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
 
@@ -153,18 +175,20 @@ class OCNLIDataset(T5Dataset):
         
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
-            if d["label"] in ["entailment", "contradiction", "neutral"]:
+            if self.do_infer or d["label"] in ["entailment", "contradiction", "neutral"]:
                 context = self.prefix_ids + [39] + self.tokenizer.encode(d["sentence1"])[:self.enc_seq_length // 2 - 4] + [41, 62, 39] + self.tokenizer.encode(d["sentence2"])[:self.enc_seq_length // 2 - 4] + [41, 11, 1348, self.tokenizer.get_sentinel_id(0)]
-                target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+                target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
+                    "idx": d["id"] if self.do_infer else self.idx,  
                     "enc_input_ids": context,
                     "dec_input_ids": target[:-1],
                     "label_ids": target[1:]
                 })
                 enc_sizes.append(len(context))
                 dec_sizes.append(len(target) - 1)
+                self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -173,8 +197,8 @@ class OCNLIDataset(T5Dataset):
 
 
 class AFQMCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(AFQMCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(AFQMCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
 
@@ -193,16 +217,18 @@ class AFQMCDataset(T5Dataset):
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
             context = self.prefix_ids + [39] + self.tokenizer.encode(d["sentence1"])[:self.enc_seq_length // 2 - 4] + [41, 62, 39] + self.tokenizer.encode(d["sentence2"])[:self.enc_seq_length // 2 - 4] + [41, 11, 1348, self.tokenizer.get_sentinel_id(0)]
-            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             data.append({
+                "idx": d["id"] if self.do_infer else self.idx,
                 "enc_input_ids": context,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
             })
             enc_sizes.append(len(context))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -211,8 +237,8 @@ class AFQMCDataset(T5Dataset):
 
 
 class IFLYTEKDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
+        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
 
@@ -231,16 +257,18 @@ class IFLYTEKDataset(T5Dataset):
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
             context = self.prefix_ids + self.tokenizer.encode(d["sentence"])[:self.enc_seq_length]
-            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]] if d["label"] in self.label_word_map else d["label_des"])
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]] if d["label"] in self.label_word_map else d["label_des"]) if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             data.append({
+                "idx": d["id"] if self.do_infer else self.idx,
                 "enc_input_ids": context,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
             })
             enc_sizes.append(len(context))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -249,8 +277,8 @@ class IFLYTEKDataset(T5Dataset):
 
 
 class CMNLIDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CMNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(CMNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
 
@@ -269,18 +297,20 @@ class CMNLIDataset(T5Dataset):
         
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
-            if d["label"] in ["entailment", "contradiction", "neutral"]:
+            if self.do_infer or d["label"] in ["entailment", "contradiction", "neutral"]:
                 context = self.prefix_ids + [39] + self.tokenizer.encode(d["sentence1"])[:self.enc_seq_length // 2 - 4] + [41, 62, 39] + self.tokenizer.encode(d["sentence2"])[:self.enc_seq_length // 2 - 4] + [41, 11, 1348, self.tokenizer.get_sentinel_id(0)]
-                target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+                target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
+                    "idx": d["id"] if self.do_infer else self.idx,
                     "enc_input_ids": context,
                     "dec_input_ids": target[:-1],
                     "label_ids": target[1:]
                 })
                 enc_sizes.append(len(context))
                 dec_sizes.append(len(target) - 1)
+                self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -289,8 +319,8 @@ class CMNLIDataset(T5Dataset):
 
 
 class CSLDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CSLDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(CSLDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
 
@@ -314,16 +344,18 @@ class CSLDataset(T5Dataset):
                 key_words += self.tokenizer.encode(x) + [16]
             key_words = key_words[:-1]
             context = self.prefix_ids + context[:self.enc_seq_length - len(key_words)] + key_words
-            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_word_map[d["label"]])
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             data.append({
+                "idx": d["id"] if self.do_infer else self.idx,
                 "enc_input_ids": context,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
             })
             enc_sizes.append(len(context))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -352,8 +384,8 @@ def cut_to_max_len(prefix, postfix, max_len):
 
 
 class CHIDDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(CHIDDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
+        super(CHIDDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
         data = []
@@ -362,9 +394,11 @@ class CHIDDataset(T5Dataset):
 
         with open(self.path, "r") as f:
             lines = f.readlines()
-
-        with open(self.path.replace(".json", "_answer.json"), "r") as f:
-            ans_d = json.load(f)
+        
+        ans_d = None
+        if not self.do_infer:
+            with open(self.path.replace(".json", "_answer.json"), "r") as f:
+                ans_d = json.load(f)
 
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
@@ -380,7 +414,7 @@ class CHIDDataset(T5Dataset):
         return data, max_enc_len, max_dec_len
 
     def process_one_sent(self, sent, answers, cands):
-        pattern = re.compile(r"#idiom\d+#")
+        pattern = re.compile(r"#idiom(\d+)#")
         start = 0
         samples = []
         enc_sizes, dec_sizes = [], []
@@ -408,11 +442,12 @@ class CHIDDataset(T5Dataset):
 
             ids = self.prefix_ids + ids
 
-            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(cands[answers[m.group()]])
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(cands[answers[m.group()]]) if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             
             samples.append({
+                "idx": int(m.group(1)) if self.do_infer else self.idx,
                 "enc_input_ids": ids,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
@@ -420,6 +455,7 @@ class CHIDDataset(T5Dataset):
 
             enc_sizes.append(len(ids))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
     
             start = m.end()
 
@@ -427,8 +463,8 @@ class CHIDDataset(T5Dataset):
 
 
 class CHIDDataset2(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CHIDDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(CHIDDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
         data = []
@@ -437,9 +473,11 @@ class CHIDDataset2(T5Dataset):
 
         with open(self.path, "r") as f:
             lines = f.readlines()
-
-        with open(self.path.replace(".json", "_answer.json"), "r") as f:
-            ans_d = json.load(f)
+        
+        ans_d = None
+        if not self.do_infer:
+            with open(self.path.replace(".json", "_answer.json"), "r") as f:
+                ans_d = json.load(f)
 
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
@@ -469,7 +507,7 @@ class CHIDDataset2(T5Dataset):
             1320
         ]
 
-        pattern = re.compile(r"#idiom\d+#")
+        pattern = re.compile(r"#idiom(\d+)#")
         start = 0
         samples = []
         enc_sizes, dec_sizes = [], []
@@ -497,11 +535,12 @@ class CHIDDataset2(T5Dataset):
 
             ids = self.prefix_ids + ids
 
-            target = [1, self.tokenizer.get_sentinel_id(0)] + [number_map[answers[m.group()]]]
+            target = [1, self.tokenizer.get_sentinel_id(0)] + ([number_map[answers[m.group()]]] if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             
             samples.append({
+                "idx": int(m.group(1)) if self.do_infer else self.idx,
                 "enc_input_ids": ids,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
@@ -509,6 +548,7 @@ class CHIDDataset2(T5Dataset):
 
             enc_sizes.append(len(ids))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
     
             start = m.end()
 
@@ -516,8 +556,8 @@ class CHIDDataset2(T5Dataset):
 
 
 class CMRCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(CMRCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
+        super(CMRCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
         with open(self.path, "r") as f:
@@ -530,23 +570,31 @@ class CMRCDataset(T5Dataset):
             dd = dd["paragraphs"]
             for d in dd:
                 context = d["context"]
-
                 for qa in d["qas"]:
                     question_ids = self.tokenizer.encode(qa["question"])
-                    answer = ""
-                    answer_start = 0
-                    for x in qa["answers"]:
-                        if x["answer_start"] != -1:
-                            answer = x["text"]
-                            answer_start = x["answer_start"]
-                            break
-                    all_answers = [x["text"] for x in qa["answers"]]
+                    sidx = qa["id"].split("_")
+                    sidx = int(sidx[1]) * 100000 + int(sidx[3])
+                    all_answers = []
+                    if not self.do_infer:
+                        answer = ""
+                        answer_start = 0
+                        for x in qa["answers"]:
+                            if x["answer_start"] != -1:
+                                answer = x["text"]
+                                answer_start = x["answer_start"]
+                                break
+                        all_answers = [x["text"] for x in qa["answers"]]
 
-                    prefix = self.tokenizer.encode(context[:answer_start])
-                    postfix = self.tokenizer.encode(context[answer_start+len(answer):])
+                        prefix = self.tokenizer.encode(context[:answer_start])
+                        postfix = self.tokenizer.encode(context[answer_start+len(answer):])
 
-                    fake_answer_ids = self.tokenizer.encode(context[answer_start:answer_start+len(answer)])
-                    answer_ids = self.tokenizer.encode(answer)
+                        fake_answer_ids = self.tokenizer.encode(context[answer_start:answer_start+len(answer)])
+                        answer_ids = self.tokenizer.encode(answer)
+                    else:
+                        prefix = self.tokenizer.encode(context)
+                        postfix = []
+                        fake_answer_ids = []
+
                     enc_input_ids = self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("文章：")
 
                     max_len = self.enc_seq_length - len(fake_answer_ids) - len(enc_input_ids)
@@ -554,10 +602,11 @@ class CMRCDataset(T5Dataset):
 
                     enc_input_ids.extend(prefix + fake_answer_ids + postfix)
                     enc_input_ids = self.prefix_ids + enc_input_ids
-                    target = [1, self.tokenizer.get_sentinel_id(0)] + answer_ids
+                    target = [1, self.tokenizer.get_sentinel_id(0)] + (answer_ids if not self.do_infer else [self.tokenizer.pad_id])
                     if self.add_target_post:
                         target = target + [self.tokenizer.get_sentinel_id(1)]
                     data.append({
+                        "idx": sidx if self.do_infer else self.idx,
                         "enc_input_ids": enc_input_ids,
                         "dec_input_ids": target[:-1],
                         "label_ids": target[1:],
@@ -566,6 +615,7 @@ class CMRCDataset(T5Dataset):
 
                     enc_sizes.append(len(enc_input_ids))
                     dec_sizes.append(len(target) - 1)
+                    self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -583,8 +633,8 @@ class CMRCDataset(T5Dataset):
 
 
 class C3Dataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(C3Dataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
+        super(C3Dataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
     
     def process_data(self):
         data = []
@@ -600,14 +650,14 @@ class C3Dataset(T5Dataset):
                 choice_ids = []
                 for choice in qa["choice"]:
                     choice_ids.extend(self.tokenizer.encode(choice) + [18])
-                answer_ids = self.tokenizer.encode(qa["answer"])
                 enc_input_ids = self.prefix_ids + self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids + self.tokenizer.encode("文章：") + context_ids
                 # NOTE: This can be dangerous
                 enc_input_ids = enc_input_ids[:self.enc_seq_length]
-                target = [1, self.tokenizer.get_sentinel_id(0)] + answer_ids
+                target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(qa["answer"]) if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
+                    "idx": qa["id"] if self.do_infer else self.idx,
                     "enc_input_ids": enc_input_ids,
                     "dec_input_ids": target[:-1],
                     "label_ids": target[1:]
@@ -615,6 +665,7 @@ class C3Dataset(T5Dataset):
 
                 enc_sizes.append(len(enc_input_ids))
                 dec_sizes.append(len(target) - 1)
+                self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -623,8 +674,8 @@ class C3Dataset(T5Dataset):
 
 
 class C3Dataset2(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(C3Dataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(C3Dataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
     
     def process_data(self):
         data = []
@@ -651,14 +702,14 @@ class C3Dataset2(T5Dataset):
                 choice_ids = []
                 for i, choice in enumerate(qa["choice"]):
                     choice_ids.extend([number_map[i], 20] + self.tokenizer.encode(choice) + [18])
-                truth_id = number_map[qa["choice"].index(qa["answer"])]
                 enc_input_ids = self.prefix_ids + self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids + self.tokenizer.encode("文章：") + context_ids
                 # NOTE: This can be dangerous
                 enc_input_ids = enc_input_ids[:self.enc_seq_length]
-                target = [1, self.tokenizer.get_sentinel_id(0)] + [truth_id]
+                target = [1, self.tokenizer.get_sentinel_id(0)] + ([number_map[qa["choice"].index(qa["answer"])]] if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
+                    "idx": qa["id"] if self.do_infer else self.idx,
                     "enc_input_ids": enc_input_ids,
                     "dec_input_ids": target[:-1],
                     "label_ids": target[1:],
@@ -666,6 +717,7 @@ class C3Dataset2(T5Dataset):
 
                 enc_sizes.append(len(enc_input_ids))
                 dec_sizes.append(len(target) - 1)
+                self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -674,8 +726,8 @@ class C3Dataset2(T5Dataset):
 
 
 class WSCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(WSCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(WSCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
         data = []
@@ -694,10 +746,11 @@ class WSCDataset(T5Dataset):
             context = d["text"]
             context = context[:d["target"]["span2_index"]] + d["target"]["span1_text"] + context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):]
             context = self.prefix_ids + self.tokenizer.encode(context)
-            target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(self.label_map[d["label"]])
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
             if self.add_target_post:
                 target += [self.tokenizer.get_sentinel_id(1)]
             data.append({
+                "idx": d["id"] if self.do_infer else self.idx,
                 "enc_input_ids": context,
                 "dec_input_ids": target[:-1],
                 "label_ids": target[1:]
@@ -705,6 +758,7 @@ class WSCDataset(T5Dataset):
 
             enc_sizes.append(len(context))
             dec_sizes.append(len(target) - 1)
+            self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
@@ -713,8 +767,8 @@ class WSCDataset(T5Dataset):
 
 
 class CombinedDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None):
-        super(CombinedDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+        super(CombinedDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
         
@@ -752,8 +806,8 @@ class CombinedDataset(T5Dataset):
 
 
 class WSCDataset2(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None):
-        super(WSCDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
+        super(WSCDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
 
     def process_data(self):
         data = []
@@ -765,30 +819,27 @@ class WSCDataset2(T5Dataset):
         for line in lines[:int(self.ratio * len(lines))]:
             d = json.loads(line)
             
-            if self.split in ["dev", "test"] or d["label"] == "true":
+            if self.do_infer or self.split in ["dev", "test"] or d["label"] == "true":
                 context = d["text"]
                 context = self.tokenizer.encode(context[:d["target"]["span2_index"]]) + [495] + self.tokenizer.encode(d["target"]["span2_text"]) + [495] + self.tokenizer.encode(context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):])
                 context = self.prefix_ids + context
-                target = [1, self.tokenizer.get_sentinel_id(0)] + self.tokenizer.encode(d["target"]["span1_text"])
+                target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(d["target"]["span1_text"]) if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
+                    "idx": d["id"] if self.do_infer else self.idx,
                     "enc_input_ids": context,
                     "dec_input_ids": target[:-1],
                     "label_ids": target[1:],
-                    "truth": 1 if d["label"] == "true" else 0
+                    "cand_ids": d["target"]["span1_text"],
+                    "truth": (1 if d["label"] == "true" else 0) if not self.do_infer else None
                 })
 
                 enc_sizes.append(len(context))
                 dec_sizes.append(len(target) - 1)
+                self.idx += 1
 
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
 
         return data, max_enc_len, max_dec_len
-
-    def collate(self, samples):
-        model_data, no_model_data = super().collate(samples)
-        no_model_data["truth"] = torch.tensor([s["truth"] for s in samples], dtype=torch.long)
-
-        return model_data, no_model_data

@@ -250,7 +250,7 @@ def save_ds_checkpoint(iteration, model, args):
         sd['cuda_rng_state'] = torch.cuda.get_rng_state()
         sd['rng_tracker_states'] = mpu.get_cuda_rng_tracker().get_states()
         
-    model.save_checkpoint(args.save, str(iteration), client_state = sd)
+    model.save_checkpoint(args.save, str(iteration), client_state = sd, save_zero=False)
 
 
 def get_checkpoint_iteration(args):

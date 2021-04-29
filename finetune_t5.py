@@ -19,6 +19,7 @@
 USE_TORCH_DDP = False
 
 from datetime import datetime
+from infer_funcs import infer_afqmc, infer_c32, infer_chid2, infer_cmnli, infer_cmrc, infer_csl, infer_iflytek, infer_ocnli, infer_tnews, infer_wsc2
 import os
 import random
 import math
@@ -195,7 +196,7 @@ def setup_model_and_optimizer(args, vocab_size, ds_config):
     return model, optimizer, lr_scheduler
 
 
-def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False):
+def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False, do_infer=False):
     for k in model_batch:
         model_batch[k] = model_batch[k].to(device)
     for k in no_model_batch:
@@ -209,15 +210,21 @@ def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidd
         output = model(**model_batch)
     
     logits = output["lm_logits"]
-    losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(), no_model_batch["labels"])
-    loss_mask = no_model_batch["loss_mask"]
-    losses = (losses * loss_mask).sum(-1) / loss_mask.sum(-1)
-    loss = losses.mean()
-
+    forw_out = {
+        "logits": logits
+    }
     if keep_enc_hidden:
-        return loss, logits, enc_hidden_states
-    else:
-        return loss, logits
+        forw_out["enc_hidden_states"] = enc_hidden_states
+    
+    if not do_infer:
+        losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(), no_model_batch["labels"])
+        loss_mask = no_model_batch["loss_mask"]
+        losses = (losses * loss_mask).sum(-1) / loss_mask.sum(-1)
+        loss = losses.mean()
+
+        forw_out["loss"] = loss
+    
+    return forw_out
 
 
 def backward_step(args, loss, model, optimizer):
@@ -262,7 +269,9 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
         model.train()
         for model_batch, no_model_batch in train_dataloader:
 
-            loss, _ = forward_step(args, model_batch, no_model_batch, model, device)
+            forw_out = forward_step(args, model_batch, no_model_batch, model, device)
+            loss = forw_out["loss"]
+            
             if torch.distributed.get_rank() == 0:
                 print(loss)
 
@@ -299,7 +308,7 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
             # Evaluation
             if args.eval_interval and global_step % args.eval_interval == 0 and step % args.gradient_accumulation_steps == 0 and args.do_valid:
                 prefix = 'iteration {} | '.format(global_step)
-                eval_loss, acc = eval_func(args, tokenizer, dev_dataset, dev_dataloader, model, device, mode="dev")
+                eval_loss, acc = eval_func(args, tokenizer, data_config, dev_dataset, dev_dataloader, model, device, mode="dev")
                 log_string = prefix + " eval_loss: " + str(eval_loss) + " | eval acc: " + str(acc)
                 print_rank_0(log_string)
                 save_rank_0(args, log_string)
@@ -311,7 +320,7 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
     return global_step
 
 
-def evaluate(args, tokenizer: EncDecTokenizer, eval_dataset, eval_data_loader, model, device, mode='dev'):
+def evaluate(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_data_loader, model, device, mode='dev'):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.
@@ -320,43 +329,52 @@ def evaluate(args, tokenizer: EncDecTokenizer, eval_dataset, eval_data_loader, m
     total_loss = 0.0
     step = 0
 
+    all_idx = []
     all_preds = []
     all_labels = []
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
-            loss, logits = forward_step(args, model_batch, no_model_batch, model, device)
+            forw_out = forward_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"))
+            loss = forw_out["loss"].item() if "loss" in forw_out else 0
+            total_loss += loss
 
-            total_loss += loss.item()
-
-            logits_list = [torch.zeros_like(logits) for _ in range(mpu.get_model_parallel_world_size())]
-            torch.distributed.all_gather(logits_list, logits, mpu.get_model_parallel_group())
+            logits_list = [torch.zeros_like(forw_out["logits"]) for _ in range(mpu.get_model_parallel_world_size())]
+            torch.distributed.all_gather(logits_list, forw_out["logits"], mpu.get_model_parallel_group())
 
             gathered_logits = torch.cat(logits_list, dim=-1)
 
             pred_token_logits = gathered_logits[:, 1, :]
             preds = torch.argmax(pred_token_logits, dim=-1)
-            labels = no_model_batch["labels"][:, 1]
-            
             gathered_preds = [torch.zeros_like(preds) for _ in range(mpu.get_data_parallel_world_size())]
-            gathered_labels = [torch.zeros_like(labels) for _ in range(mpu.get_data_parallel_world_size())]
-
             torch.distributed.all_gather(gathered_preds, preds.contiguous(), mpu.get_data_parallel_group())
-            torch.distributed.all_gather(gathered_labels, labels.contiguous(), mpu.get_data_parallel_group())
-
             all_preds.extend(gathered_preds)
-            all_labels.extend(gathered_labels)
+            
+            gathered_idx = [torch.zeros_like(no_model_batch["idx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_idx, no_model_batch["idx"].contiguous(), mpu.get_data_parallel_group())
+            all_idx.extend(gathered_idx)
+
+            if mode != "infer":
+                labels = no_model_batch["labels"][:, 1]
+                gathered_labels = [torch.zeros_like(labels) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(gathered_labels, labels.contiguous(), mpu.get_data_parallel_group())
+                all_labels.extend(gathered_labels)
 
             step += 1
 
     total_loss /= step
 
-    all_preds = torch.cat(all_preds, dim=0)
-    all_labels = torch.cat(all_labels, dim=0)
+    all_idx = torch.cat(all_idx, dim=0).cpu().tolist()
+    all_preds = torch.cat(all_preds, dim=0).cpu().tolist()
 
-    acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+    if mode == "infer":
+        return data_config[args.data_name]["infer_func"](args, tokenizer, all_idx, all_preds)
+    else:
+        all_labels = torch.cat(all_labels, dim=0).cpu().tolist()
 
-    return total_loss, acc
+        acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+
+        return total_loss, acc
 
 
 def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
@@ -387,7 +405,7 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
     return logits
 
 
-def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_dataset: T5Dataset, eval_data_loader, model, device, mode="dev"):
+def evaluate_gen(args, tokenizer: EncDecTokenizer, data_config, eval_dataset: T5Dataset, eval_data_loader, model, device, mode="dev"):
     """Evaluation."""
 
     # Turn on evaluation mode which disables dropout.
@@ -398,14 +416,16 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_dataset: T5Dataset, eval
 
     all_preds = []
     all_labels = []
-    all_truth = []
+    all_idx = []
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
             
-            loss, logits, enc_hidden_states = forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=True)
+            forw_out = forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=True, do_infer=(mode=="infer"))
+            loss = forw_out["loss"].item() if "loss" in forw_out else 0
+            total_loss += loss
 
-            total_loss += loss.item()
+            enc_hidden_states = forw_out["enc_hidden_states"]
 
             # for generating responses
             # we only use the <go> token, so truncate other tokens
@@ -456,46 +476,44 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, eval_dataset: T5Dataset, eval
                 unfinished_sents.mul_(tokens_to_add.ne(tokenizer.get_sentinel_id(1)).long())
             
             gathered_preds = [torch.zeros_like(output_ids) for _ in range(mpu.get_data_parallel_world_size())]
-            gathered_labels = [torch.zeros_like(no_model_batch["labels"]) for _ in range(mpu.get_data_parallel_world_size())]
-
             torch.distributed.all_gather(gathered_preds, output_ids, mpu.get_data_parallel_group())
-            torch.distributed.all_gather(gathered_labels, no_model_batch["labels"], mpu.get_data_parallel_group())
-
             all_preds.extend(gathered_preds)
-            all_labels.extend(gathered_labels)
+            
+            gathered_idx = [torch.zeros_like(no_model_batch["idx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_idx, no_model_batch["idx"].contiguous(), mpu.get_data_parallel_group())
+            all_idx.extend(gathered_idx)
 
-            if args.data_name in ["wsc2"]:
-                gathered_truth = [torch.zeros_like(no_model_batch["truth"]) for _ in range(mpu.get_data_parallel_world_size())]
-                torch.distributed.all_gather(gathered_truth, no_model_batch["truth"], mpu.get_data_parallel_group())
-                all_truth.extend(gathered_truth)
-                
+            if mode != "infer":
+                gathered_labels = [torch.zeros_like(no_model_batch["labels"]) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(gathered_labels, no_model_batch["labels"], mpu.get_data_parallel_group())
+                all_labels.extend(gathered_labels)
+
             step += 1
 
     total_loss /= step
 
+    all_idx = torch.cat(all_idx, dim=0).cpu().tolist()
     all_preds = torch.cat(all_preds, dim=0).cpu().tolist()
-    all_labels = torch.cat(all_labels, dim=0).cpu().tolist()
-
     all_preds = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_preds]
-    all_labels = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_labels]
-
-    with open(os.path.join(args.save, "preds.txt"), "w") as f:
-        for p in all_preds:
-            f.write(tokenizer.decode(p) + "\n")
-    
-    with open(os.path.join(args.save, "labels.txt"), "w") as f:
-        for l in all_labels:
-            f.write(tokenizer.decode(l) + "\n")
-
     if args.data_name in ["wsc2"]:
-        all_truth = torch.cat(all_truth, dim=0).cpu().tolist()
-        acc = wsc2_metric(tokenizer, all_preds, all_labels, all_truth)
-    elif args.data_name in ["cmrc"]:
-        acc = cmrc_metric(tokenizer, all_preds, eval_dataset.data)
-    else:
-        acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+        all_preds = [tokenizer.decode(p[1:-1]) for p in all_preds]
+        all_preds = [int(p in d["cand_ids"] or d["cand_ids"] in p) for p, d in zip(all_preds, eval_dataset.data)]
 
-    return total_loss, acc
+    if mode == "infer":
+        return data_config[args.data_name]["infer_func"](args, tokenizer, all_idx, all_preds)
+    else:
+        if args.data_name == "wsc2":
+            all_labels = [d["truth"] for d in eval_dataset.data]
+        else:
+            all_labels = torch.cat(all_labels, dim=0).cpu().tolist()
+            all_labels = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_labels]
+        
+        if args.data_name in ["cmrc"]:
+            acc = cmrc_metric(tokenizer, all_preds, eval_dataset.data)
+        else:
+            acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+
+        return total_loss, acc
 
 
 def wsc2_metric(tokenizer: EncDecTokenizer, all_preds, all_labels, all_truth):
@@ -580,10 +598,10 @@ def set_random_seed(seed):
         mpu.model_parallel_cuda_manual_seed(seed)
 
 
-def load_data(args, data_config, data_type, tokenizer, ratio=1):
+def load_data(args, data_config, data_type, tokenizer, ratio=1, drop_last=True, do_infer=False):
     data_path = os.path.join(args.data_path, data_type + args.data_ext)
 
-    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, data_type, ratio=ratio, prefix=args.data_prefix, cache_path=data_config[args.data_name]["cache_path"])
+    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, data_type, ratio=ratio, prefix=args.data_prefix, cache_path=data_config[args.data_name]["cache_path"], do_infer=do_infer)
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
@@ -597,7 +615,7 @@ def load_data(args, data_config, data_type, tokenizer, ratio=1):
         sampler = torch.utils.data.SequentialSampler(dataset)
     batch_sampler = DistributedBatchSampler(sampler=sampler,
                                             batch_size=global_batch_size,
-                                            drop_last=True,
+                                            drop_last=drop_last,
                                             rank=rank,
                                             world_size=world_size)
 
@@ -653,67 +671,80 @@ def main():
         "tnews": {
             "dataset": TNewsDataset,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_tnews
         },
         "afqmc": {
             "dataset": AFQMCDataset,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_afqmc
         },
         "ocnli": {
             "dataset": OCNLIDataset,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_ocnli
         },
         "iflytek": {
             "dataset": IFLYTEKDataset,
             "eval_func": evaluate_gen,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_iflytek
         },
         "cmnli": {
             "dataset": CMNLIDataset,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_cmnli
         },
         "csl": {
             "dataset": CSLDataset,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_csl
         },
         "chid": {
             "dataset": CHIDDataset,
             "eval_func": evaluate_gen,
-            "cache_path": args.data_path
+            "cache_path": args.data_path,
+            "infer_func": None
         },
         "cmrc": {
             "dataset": CMRCDataset,
             "eval_func": evaluate_gen,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_cmrc
         },
         "c3": {
             "dataset": C3Dataset,
             "eval_func": evaluate_gen,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": None
         },
         "c32": {
             "dataset": C3Dataset2,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_c32
         },
         "wsc": {
             "dataset": WSCDataset,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": None
         },
         "wsc2": {
             "dataset": WSCDataset2,
             "eval_func": evaluate_gen,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_wsc2
         },
         "chid2": {
             "dataset": CHIDDataset2,
             "eval_func": evaluate,
-            "cache_path": None
+            "cache_path": None,
+            "infer_func": infer_chid2
         },
         "combined": {
             "dataset": CombinedDataset,
@@ -731,11 +762,22 @@ def main():
         eval_dataloader, eval_dataset = load_data(args, data_config, 'dev', tokenizer, ratio=1)
         eval_func = data_config[args.data_name]["eval_func"]
 
-        loss, acc = eval_func(args, tokenizer, eval_dataset, eval_dataloader, model, device, mode="test")
+        loss, acc = eval_func(args, tokenizer, data_config, eval_dataset, eval_dataloader, model, device, mode="test")
 
         log_string = "Eval result: loss: {:.6} | acc: {:.4}".format(loss, acc)
         print_rank_0(log_string)
         save_rank_0(args, log_string)
+
+    if args.do_infer:
+        infer_dataloader, infer_dataset = load_data(args, data_config, "test", tokenizer, ratio=1, drop_last=True, do_infer=True)
+        eval_func = data_config[args.data_name]["eval_func"]
+
+        sample_num = eval_func(args, tokenizer, data_config, infer_dataset, infer_dataloader, model, device, mode="infer")
+
+        log_string = "Inferenced {} samples".format(sample_num)
+        print_rank_0(log_string)
+        save_rank_0(args, log_string)
+
 
 if __name__ == "__main__":
     main()

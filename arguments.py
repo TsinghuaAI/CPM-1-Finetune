@@ -106,6 +106,7 @@ def add_training_args(parser: argparse.ArgumentParser):
     group.add_argument('--do_train', action="store_true")
     group.add_argument('--do_valid', action="store_true")
     group.add_argument('--do_eval', action="store_true")
+    group.add_argument('--do_infer', action="store_true")
     group.add_argument('--epochs', type=int, default=1)
     group.add_argument('--batch-size', type=int, default=4,
                        help='Data Loader batch size')

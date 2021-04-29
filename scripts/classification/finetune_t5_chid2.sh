@@ -43,7 +43,7 @@ BATCH_SIZE=4
 GRAD_ACC=8
 LR=0.000005
 TRAIN_ITER=20000
-EPOCHS=10
+EPOCHS=2
 
 ENC_LEN=512
 DEC_LEN=256
@@ -75,7 +75,7 @@ OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
-OPTS+=" --save-interval 10000"
+OPTS+=" --save-interval 4600"
 OPTS+=" --eval-interval 100"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
