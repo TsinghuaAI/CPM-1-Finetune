@@ -189,10 +189,10 @@ def save_zero_checkpoint(args, iteration, optimizer):
     print('  successfully saved {}'.format(zero_checkpoint_name))
 
 def save_checkpoint(iteration, model, optimizer,
-                    lr_scheduler, args):
+                    lr_scheduler, args, save_dir=None):
     """Save a model checkpoint."""
     if args.deepspeed:
-        save_ds_checkpoint(iteration, model, args)
+        save_ds_checkpoint(iteration, model, args, save_dir)
     else:
         # Only rank zer0 of the data parallel writes to the disk.
         if isinstance(model, torchDDP):
@@ -237,7 +237,7 @@ def save_checkpoint(iteration, model, optimizer,
     # Wait so everyone is done (not necessary)
     torch.distributed.barrier()
 
-def save_ds_checkpoint(iteration, model, args):
+def save_ds_checkpoint(iteration, model, args, save_dir=None):
     """Save a model checkpoint."""
 
     sd = {}
@@ -250,7 +250,7 @@ def save_ds_checkpoint(iteration, model, args):
         sd['cuda_rng_state'] = torch.cuda.get_rng_state()
         sd['rng_tracker_states'] = mpu.get_cuda_rng_tracker().get_states()
         
-    model.save_checkpoint(args.save, str(iteration), client_state = sd, save_zero=False)
+    model.save_checkpoint(args.save if save_dir is None else save_dir, str(iteration), client_state = sd, save_zero=False)
 
 
 def get_checkpoint_iteration(args):

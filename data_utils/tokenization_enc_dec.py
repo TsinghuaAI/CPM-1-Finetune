@@ -160,3 +160,9 @@ class EncDecTokenizer(object):
         text = ''.join([self.decoder[x] for x in tokens])
         text = text.replace('\u2582', ' ').replace('\u2583', '\n')
         return text
+
+    def convert_tokens_to_ids(self, tokens):
+        return [self.encoder[x] for x in tokens]
+
+    def convert_ids_to_tokens(self, ids):
+        return [self.decoder[x] for x in ids]

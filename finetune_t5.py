@@ -27,6 +27,7 @@ import numpy as np
 import torch
 import json
 from tqdm import tqdm
+import shutil
 
 import deepspeed
 
@@ -265,6 +266,8 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
 
     step, global_step = 1, 1
 
+    best_accs = []
+
     for e in range(args.epochs):
         model.train()
         for model_batch, no_model_batch in train_dataloader:
@@ -312,6 +315,21 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
                 log_string = prefix + " eval_loss: " + str(eval_loss) + " | eval acc: " + str(acc)
                 print_rank_0(log_string)
                 save_rank_0(args, log_string)
+
+                if args.max_save > 0:
+                    i = 0
+                    while i < len(best_accs):
+                        if best_accs[i] < acc:
+                            break
+                        i += 1
+                    if len(best_accs) < args.max_save or i < len(best_accs):
+                        best_accs.insert(i, acc)
+                        if len(best_accs) > args.max_save:
+                            acc_to_be_rm = best_accs[-1]
+                            if torch.distributed.get_rank() == 0:
+                                shutil.rmtree(os.path.join(args.save, "acc_{:.3}".format(acc_to_be_rm)))
+                        save_checkpoint(global_step, model, optimizer, lr_scheduler, args, save_dir=os.path.join(args.save, "acc_{:.3}".format(acc)))
+                        best_accs = best_accs[:args.max_save]
 
             step += 1
             if step % args.gradient_accumulation_steps == 0:

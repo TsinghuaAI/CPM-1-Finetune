@@ -235,12 +235,10 @@ def infer_chid2(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix="")
 
     num = 0
     with open(os.path.join(args.save, "predicts{}.json".format(prefix)), "w") as f:
+        res = {}
         for i, p in zip(all_idx, all_preds):
             if i != -1:
-                f.write(json.dumps({
-                    "id": "#idiom{}#".format(i),
-                    "label": number_map[p],
-                }) + "\n")
+                res["#idiom{}#".format(i)] = number_map[p]
                 num += 1
-
+        json.dump(res, f, indent=4)
     return num
