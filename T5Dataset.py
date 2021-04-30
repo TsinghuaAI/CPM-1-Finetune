@@ -513,7 +513,8 @@ class CHIDDataset2(T5Dataset):
         enc_sizes, dec_sizes = [], []
         cands_ids = self.tokenizer.encode("选项：")
         for i, cand in enumerate(cands):
-            cands_ids.extend([number_map[i], 20] + self.tokenizer.encode(cand.strip()) + [16])
+            cand = list(cand.strip())
+            cands_ids.extend([number_map[i], 20] + self.tokenizer.convert_tokens_to_ids(cand) + [16])
 
         while True:
             m = pattern.search(sent, start)

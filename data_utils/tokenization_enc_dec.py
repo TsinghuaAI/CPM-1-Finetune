@@ -162,7 +162,7 @@ class EncDecTokenizer(object):
         return text
 
     def convert_tokens_to_ids(self, tokens):
-        return [self.encoder[x] for x in tokens]
+        return [self.encoder.get(x, self.encoder["<unk>"]) for x in tokens]
 
     def convert_ids_to_tokens(self, ids):
         return [self.decoder[x] for x in ids]

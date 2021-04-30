@@ -98,6 +98,13 @@ def infer_iflytek(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix="
     labels.update(label_word_map)
     labels = {v:k for k, v in labels.items()}
 
+    labels.update({
+        "婚纱": "6",
+        "母乳婴": "72",
+        "母乳": "72",
+        "收银": "收款",
+    })
+
     all_preds = [tokenizer.decode(p[1:-1]) for p in all_preds]
     
     num = 0
@@ -106,7 +113,7 @@ def infer_iflytek(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix="
             if i != -1:
                 f.write(json.dumps({
                     "id": i,
-                    "label": labels.get(p, "0"),
+                    "label": labels.get(p, "118"),
                 }) + "\n")
                 num += 1
                 if p not in labels:
