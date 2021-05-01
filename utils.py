@@ -293,6 +293,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, args):
         checkpoint_name, sd = model.load_checkpoint(
             args.load,
             iteration,
+            load_module_strict=False,
             load_optimizer_states=args.load_oprimizer_states,
             load_lr_scheduler_states=args.load_lr_scheduler_states)
 

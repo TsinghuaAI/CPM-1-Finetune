@@ -623,8 +623,9 @@ class ParallelTransformer(nn.Module):
             checkpoint = deepspeed.checkpointing.checkpoint
 
     def init_prompt_embeds(self):
-        prompt_weights = self.word_embeds(self.prompt_config["init_ids"]).detach()
-        self.prompt_embeds = nn.Embedding(self.prompt_config["prompt_len"], self.config.d_model).from_pretrained(prompt_weights, freeze=False)
+        if self.prompt_config is not None:
+            prompt_weights = self.word_embeds(self.prompt_config["init_ids"]).detach()
+            self.prompt_embeds = nn.Embedding(self.prompt_config["prompt_len"], self.config.d_model).from_pretrained(prompt_weights, freeze=False)
 
     def get_input_embeds(self, input_ids):
         if self.prompt_config is None:

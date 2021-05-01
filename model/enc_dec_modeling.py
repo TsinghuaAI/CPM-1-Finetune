@@ -47,7 +47,7 @@ class EncDecModel(nn.Module):
 
         self.encoder = mpu.ParallelTransformer(self.enc_config, word_embeds=self.word_embeds, is_decoder=False, prompt_config=prompt_config["enc"] if prompt_config is not None else None,
                                                checkpoint_activations=checkpoint_activations, checkpoint_num_layers=checkpoint_num_layers)
-        self.decoder = mpu.ParallelTransformer(self.dec_config, word_embeds=self.word_embeds, is_decoder=True, prompt_config=prompt_config["dec"] if prompt_config is not None else None,
+        self.decoder = mpu.ParallelTransformer(self.dec_config, word_embeds=self.word_embeds, is_decoder=True, prompt_config=None if prompt_config is not None else None,
                                                checkpoint_activations=checkpoint_activations, checkpoint_num_layers=checkpoint_num_layers)
 
     def init_prompt_embeds(self):

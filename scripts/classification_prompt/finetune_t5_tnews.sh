@@ -35,18 +35,18 @@ CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 # CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune/results/t5_finetune_tnews_lr0.000005const_fix2"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_tnews_lr0.000005const_prompt/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_tnews_lr0.00001const_scale100_prompt/"
 LOG_FILE="${SAVE_PATH}/log.txt"
-DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
+DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_tnews.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 PROMPT_CONFIG="${WORKING_DIR}/configs/prompt/simple.json"
 
 BATCH_SIZE=16
 GRAD_ACC=2
-LR=0.000005
+LR=0.00001
 TRAIN_ITER=20000
-EPOCHS=3
+EPOCHS=10
 
 ENC_LEN=512
 DEC_LEN=256

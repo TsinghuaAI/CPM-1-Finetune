@@ -5,7 +5,7 @@
         "default_init_token": "<mask>"
     },
     "dec": {
-        "prompt_len": 100,
+        "prompt_len": 0,
         "init_tokens": "",
         "default_init_token": "<mask>"
     }
