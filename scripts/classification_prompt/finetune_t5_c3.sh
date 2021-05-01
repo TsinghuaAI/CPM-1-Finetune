@@ -29,13 +29,12 @@ MP_SIZE=4
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
-DATA_PATH="/mnt/sfs_turbo/data/CLUE/chid"
+DATA_PATH="/mnt/sfs_turbo/data/CLUE/c3"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
-# CKPT_PATH="${WORKING_DIR}/results/t5_finetune_chid_2_lr0.000005const/"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_chid_2_lr0.000005const_single_tok_1/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_c3_lr0.000005const_fix2/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
@@ -44,7 +43,7 @@ BATCH_SIZE=4
 GRAD_ACC=8
 LR=0.000005
 TRAIN_ITER=20000
-EPOCHS=5
+EPOCHS=10
 
 ENC_LEN=512
 DEC_LEN=256
@@ -63,7 +62,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name chid2"
+OPTS+=" --data-name c3"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"
@@ -77,7 +76,7 @@ OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
 OPTS+=" --save-interval 10000"
-OPTS+=" --eval-interval 100"
+OPTS+=" --eval-interval 50"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
 OPTS+=" --checkpoint-activations"
@@ -88,9 +87,7 @@ OPTS+=" --deepspeed_config ${DS_CONFIG}"
 OPTS+=" --do_train"
 OPTS+=" --do_valid"
 OPTS+=" --do_eval"
-# OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
-OPTS+=" --max-save 3"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
 

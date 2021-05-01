@@ -26,7 +26,8 @@ class EncDecModel(nn.Module):
         config: EncDecConfig,
         parallel_output=True,
         checkpoint_activations=False,
-        checkpoint_num_layers=1):
+        checkpoint_num_layers=1,
+        prompt_config=None):
         
         super(EncDecModel, self).__init__()
         if config.vocab_size is None:
@@ -40,12 +41,18 @@ class EncDecModel(nn.Module):
 
         self.word_embeds = mpu.VocabParallelEmbedding(config.vocab_size, config.d_model, init_method=init_method)
 
+        self.prompt_config = prompt_config
+
         self.lm_head = mpu.VocabParallelEmbedding(config.vocab_size, config.d_model, init_method=init_method)
 
-        self.encoder = mpu.ParallelTransformer(self.enc_config, word_embeds=self.word_embeds, is_decoder=False,
+        self.encoder = mpu.ParallelTransformer(self.enc_config, word_embeds=self.word_embeds, is_decoder=False, prompt_config=prompt_config["enc"] if prompt_config is not None else None,
                                                checkpoint_activations=checkpoint_activations, checkpoint_num_layers=checkpoint_num_layers)
-        self.decoder = mpu.ParallelTransformer(self.dec_config, word_embeds=self.word_embeds, is_decoder=True,
+        self.decoder = mpu.ParallelTransformer(self.dec_config, word_embeds=self.word_embeds, is_decoder=True, prompt_config=prompt_config["dec"] if prompt_config is not None else None,
                                                checkpoint_activations=checkpoint_activations, checkpoint_num_layers=checkpoint_num_layers)
+
+    def init_prompt_embeds(self):
+        self.encoder.init_prompt_embeds()
+        self.decoder.init_prompt_embeds()
 
     def forward(
         self, 
@@ -63,7 +70,6 @@ class EncDecModel(nn.Module):
         if enc_hidden_states is None:
             enc_outputs = self.encoder(
                 input_ids=enc_input_ids,
-                position_ids=enc_position_ids,
                 attention_mask=enc_attention_mask,
             )
 
@@ -80,7 +86,6 @@ class EncDecModel(nn.Module):
 
         dec_outputs = self.decoder(
             input_ids=dec_input_ids,
-            position_ids=dec_position_ids,
             attention_mask=dec_attention_mask,
             cross_attention_mask=cross_attention_mask,
             enc_hidden_states=enc_hidden_states,
@@ -125,6 +130,16 @@ def enc_dec_get_params_for_weight_decay_optimization(module):
     return weight_decay_params, no_weight_decay_params
 
 
+def enc_dec_get_params_for_prompt_optimization(module: nn.Module):
+    params = []
+    for t in module.named_modules():
+        if "prompt_embeds" in t[0]:
+            params.append({'params': [p for p in list(t[1]._parameters.values()) if p is not None]})
+
+    if torch.distributed.get_rank() == 0:
+        print("print params", params)
+    return params
+
 # def enc_dec_get_params_for_weight_decay_optimization(module):
 
 #     lr_params = {'params': []}
@@ -140,4 +155,4 @@ def enc_dec_get_params_for_weight_decay_optimization(module):
 #                  if p is not None])
 
     # return lr_params, no_lr_params
-    return (lr_params, )
+    # return (lr_params, )

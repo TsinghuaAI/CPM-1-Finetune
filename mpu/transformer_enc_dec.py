@@ -587,10 +587,14 @@ class ParallelBlock(nn.Module):
 
 
 class ParallelTransformer(nn.Module):
-    def __init__(self, config: EncDecConfig, word_embeds: VocabParallelEmbedding, is_decoder=False, checkpoint_activations=False, checkpoint_num_layers=1):
+    def __init__(self, config: EncDecConfig, word_embeds: VocabParallelEmbedding, prompt_config=None, is_decoder=False, checkpoint_activations=False, checkpoint_num_layers=1):
         super(ParallelTransformer, self).__init__()
         
         self.word_embeds = word_embeds
+        self.config = config
+        self.prompt_config = prompt_config
+        if self.prompt_config is not None:
+            self.prompt_embeds = nn.Embedding(prompt_config["prompt_len"], config.d_model)
         # self.position_embeds = nn.Embedding(config.max_position_embeddings, config.d_model)
         # init_method_normal(std=config.init_method_std)(self.position_embeds.weight)
         self.dropout = nn.Dropout(config.dropout_rate)
@@ -618,16 +622,29 @@ class ParallelTransformer(nn.Module):
             get_cuda_rng_tracker = deepspeed.checkpointing.get_cuda_rng_tracker
             checkpoint = deepspeed.checkpointing.checkpoint
 
+    def init_prompt_embeds(self):
+        prompt_weights = self.word_embeds(self.prompt_config["init_ids"]).detach()
+        self.prompt_embeds = nn.Embedding(self.prompt_config["prompt_len"], self.config.d_model).from_pretrained(prompt_weights, freeze=False)
+
+    def get_input_embeds(self, input_ids):
+        if self.prompt_config is None:
+            return self.word_embeds(input_ids)
+        
+        prompt_len = self.prompt_config["prompt_len"]
+        p_embeds = self.prompt_embeds(input_ids[:, :prompt_len])
+        w_embeds = self.word_embeds(input_ids[:, prompt_len:])
+
+        return torch.cat([p_embeds, w_embeds], dim=1) # bs * seq_len * hidden
+
     def forward(
         self,
         input_ids=None,
-        position_ids=None,
         attention_mask=None,
         cross_attention_mask=None,
         enc_hidden_states=None,
         past_key_values=None,):
         
-        inputs_embeds = self.word_embeds(input_ids)
+        inputs_embeds = self.get_input_embeds(input_ids)
 
         # remove abstract position ids
         # pos_embeds = self.position_embeds(position_ids)

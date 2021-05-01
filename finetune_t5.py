@@ -37,7 +37,7 @@ from fp16 import FP16_Module
 from fp16 import FP16_Optimizer
 from learning_rates import AnnealingLR
 from model import EncDecModel, EncDecConfig
-from model import enc_dec_get_params_for_weight_decay_optimization
+from model import enc_dec_get_params_for_weight_decay_optimization, enc_dec_get_params_for_prompt_optimization
 
 if USE_TORCH_DDP:
     from torch.nn.parallel.distributed import DistributedDataParallel as DDP
@@ -63,7 +63,7 @@ import torch.nn.functional as F
 import time
 
 
-def get_model(args, vocab_size):
+def get_model(args, vocab_size, prompt_config=None):
     """Build the model."""
 
     print_rank_0('building Enc-Dec model ...')
@@ -72,7 +72,8 @@ def get_model(args, vocab_size):
     model = EncDecModel(config,
                         parallel_output=True,
                         checkpoint_activations=args.checkpoint_activations,
-                        checkpoint_num_layers=args.checkpoint_num_layers)
+                        checkpoint_num_layers=args.checkpoint_num_layers,
+                        prompt_config=prompt_config)
 
     if mpu.get_data_parallel_rank() == 0:
         print(' > number of parameters on model parallel rank {}: {}'.format(
@@ -85,6 +86,8 @@ def get_model(args, vocab_size):
 
     # GPU allocation.
     model.cuda(torch.cuda.current_device())
+    if args.prompt_tune:
+        model.init_prompt_embeds()
 
     # Fp16 conversion.
     if args.fp16:
@@ -101,14 +104,17 @@ def get_model(args, vocab_size):
     return model
 
 
-def get_optimizer(model, args):
+def get_optimizer(model, args, prompt_config=None):
     """Set up the optimizer."""
 
     # Build parameter groups (weight decay and non-decay).
     while isinstance(model, (DDP, FP16_Module)):
         model = model.module
-    param_groups = enc_dec_get_params_for_weight_decay_optimization(model)
-
+    if args.prompt_tune:
+        param_groups = enc_dec_get_params_for_prompt_optimization(model)
+    else:
+        param_groups = enc_dec_get_params_for_weight_decay_optimization(model)
+    
     # Add model parallel attribute if it is not set.
     for param_group in param_groups:
         for param in param_group['params']:
@@ -143,6 +149,9 @@ def get_optimizer(model, args):
                                        'min_scale': args.min_scale,
                                        'delayed_shift': args.hysteresis})
 
+    if torch.distributed.get_rank() == 0:
+        print(optimizer.param_groups)
+
     return optimizer
 
 
@@ -168,11 +177,11 @@ def get_learning_rate_scheduler(optimizer, args):
     return lr_scheduler
 
 
-def setup_model_and_optimizer(args, vocab_size, ds_config):
+def setup_model_and_optimizer(args, vocab_size, ds_config, prompt_config=None):
     """Setup model and optimizer."""
 
-    model = get_model(args, vocab_size)
-    optimizer = get_optimizer(model, args)
+    model = get_model(args, vocab_size, prompt_config)
+    optimizer = get_optimizer(model, args, prompt_config)
     lr_scheduler = get_learning_rate_scheduler(optimizer, args)
 
     if args.deepspeed:
@@ -319,16 +328,16 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
                 if args.max_save > 0:
                     i = 0
                     while i < len(best_accs):
-                        if best_accs[i] < acc:
+                        if best_accs[i][1] < acc:
                             break
                         i += 1
                     if len(best_accs) < args.max_save or i < len(best_accs):
-                        best_accs.insert(i, acc)
+                        best_accs.insert(i, (global_step, acc))
                         if len(best_accs) > args.max_save:
-                            acc_to_be_rm = best_accs[-1]
+                            step_to_be_rm, acc_to_be_rm = best_accs[-1]
                             if torch.distributed.get_rank() == 0:
-                                shutil.rmtree(os.path.join(args.save, "acc_{:.3}".format(acc_to_be_rm)))
-                        save_checkpoint(global_step, model, optimizer, lr_scheduler, args, save_dir=os.path.join(args.save, "acc_{:.3}".format(acc)))
+                                shutil.rmtree(os.path.join(args.save, "acc_{}_{:.3}".format(step_to_be_rm, acc_to_be_rm)))
+                        save_checkpoint(global_step, model, optimizer, lr_scheduler, args, save_dir=os.path.join(args.save, "acc_{}_{:.3}".format(global_step, acc)))
                         best_accs = best_accs[:args.max_save]
 
             step += 1
@@ -616,10 +625,19 @@ def set_random_seed(seed):
         mpu.model_parallel_cuda_manual_seed(seed)
 
 
-def load_data(args, data_config, data_type, tokenizer, ratio=1, drop_last=True, do_infer=False):
+def load_data(args, data_config, data_type, tokenizer, prompt_config=None, ratio=1, drop_last=True, do_infer=False):
     data_path = os.path.join(args.data_path, data_type + args.data_ext)
 
-    dataset = data_config[args.data_name]["dataset"](args, tokenizer, data_path, data_type, ratio=ratio, prefix=args.data_prefix, cache_path=data_config[args.data_name]["cache_path"], do_infer=do_infer)
+    dataset = data_config[args.data_name]["dataset"](
+        args,
+        tokenizer,
+        data_path,
+        data_type,
+        ratio=ratio,
+        prefix=args.data_prefix,
+        cache_path=data_config[args.data_name]["cache_path"],
+        do_infer=do_infer,
+        prompt_config=prompt_config)
 
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
@@ -671,6 +689,7 @@ def main():
 
     # Random seeds for reproducability.
     set_random_seed(args.seed)
+    device = torch.cuda.current_device()
 
     # setup tokenizer
     tokenizer = EncDecTokenizer(os.path.join(args.tokenizer_path, 'vocab.txt'))
@@ -681,9 +700,18 @@ def main():
     ds_config["gradient_accumulation_steps"] = args.gradient_accumulation_steps
     ds_config["train_micro_batch_size_per_gpu"] = args.batch_size
 
+    prompt_config = None
+    if args.prompt_tune:
+        with open(args.prompt_config, "r") as f:
+            prompt_config = json.load(f)
+            for t in ["enc", "dec"]:
+                prompt_config[t]["init_ids"] = tokenizer.encode(prompt_config[t]["init_tokens"])
+                pad_num = prompt_config[t]["prompt_len"] - len(prompt_config[t]["init_ids"])
+                prompt_config[t]["init_ids"].extend(tokenizer.convert_tokens_to_ids([prompt_config[t]["default_init_token"] for _ in range(pad_num)]))
+                prompt_config[t]["init_ids"] = torch.tensor(prompt_config[t]["init_ids"], dtype=torch.long).to(device)
+
     # Model, optimizer, and learning rate.
-    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config)
-    device = torch.cuda.current_device()
+    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config, prompt_config)
 
     data_config = {
         "tnews": {
@@ -772,12 +800,12 @@ def main():
     }
 
     if args.do_train:
-        train_dataloader, train_dataset = load_data(args, data_config, 'train', tokenizer, ratio=1)
-        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, ratio=1)
+        train_dataloader, train_dataset = load_data(args, data_config, 'train', tokenizer, prompt_config, ratio=1)
+        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1)
         train(args, data_config, tokenizer, model, optimizer, lr_scheduler, train_dataset, train_dataloader, dev_dataset, dev_dataloader, device)
 
     if args.do_eval:
-        eval_dataloader, eval_dataset = load_data(args, data_config, 'dev', tokenizer, ratio=1)
+        eval_dataloader, eval_dataset = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1)
         eval_func = data_config[args.data_name]["eval_func"]
 
         loss, acc = eval_func(args, tokenizer, data_config, eval_dataset, eval_dataloader, model, device, mode="test")
@@ -787,7 +815,7 @@ def main():
         save_rank_0(args, log_string)
 
     if args.do_infer:
-        infer_dataloader, infer_dataset = load_data(args, data_config, "test", tokenizer, ratio=1, drop_last=True, do_infer=True)
+        infer_dataloader, infer_dataset = load_data(args, data_config, "test", tokenizer, prompt_config, ratio=1, drop_last=True, do_infer=True)
         eval_func = data_config[args.data_name]["eval_func"]
 
         sample_num = eval_func(args, tokenizer, data_config, infer_dataset, infer_dataloader, model, device, mode="infer")

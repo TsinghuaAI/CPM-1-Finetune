@@ -103,6 +103,8 @@ def add_training_args(parser: argparse.ArgumentParser):
 
     group = parser.add_argument_group('train', 'training configurations')
 
+    group.add_argument('--prompt_tune', action="store_true")
+    group.add_argument('--prompt_config', type=str, default=None)
     group.add_argument('--do_train', action="store_true")
     group.add_argument('--do_valid', action="store_true")
     group.add_argument('--do_eval', action="store_true")

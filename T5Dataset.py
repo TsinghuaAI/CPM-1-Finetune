@@ -15,7 +15,7 @@ import math
 from utils import print_rank_0, save_rank_0
 
 class T5Dataset(Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
         self.args = args
         self.tokenizer = tokenizer
         self.ratio = ratio
@@ -28,6 +28,7 @@ class T5Dataset(Dataset):
         self.split = split
         self.do_infer = do_infer
         self.idx = 0
+        self.prompt_config = prompt_config
         if cache_path is not None:
             cache_path = os.path.join(cache_path, "cache_{}_{}.pkl".format(path.replace("/", "_"), ratio))
             if os.path.exists(cache_path):
@@ -39,6 +40,9 @@ class T5Dataset(Dataset):
                     pickle.dump((self.data, self.max_enc_len, self.max_dec_len), f)
         else:
             self.data, self.max_enc_len, self.max_dec_len = self.process_data()
+
+        if prompt_config is not None:
+            self.data, self.max_enc_len, self.max_dec_len = self.add_prompt_ids(self.data, self.max_enc_len, self.max_dec_len)
 
         if do_infer:
             total_eval_batch_size = mpu.get_data_parallel_world_size() * args.batch_size
@@ -54,6 +58,21 @@ class T5Dataset(Dataset):
 
     def process_data(self):
         raise NotImplementedError
+
+    def add_prompt_ids(self, data, max_enc_len, max_dec_len):
+        enc_prompt_ids = [i for i in range(self.prompt_config["enc"]["prompt_len"])]
+        dec_prompt_ids = [i for i in range(self.prompt_config["dec"]["prompt_len"])]
+        pad_ids = [self.tokenizer.pad_id for _ in range(self.prompt_config["dec"]["prompt_len"])]
+
+        for d in data:
+            d["enc_input_ids"] = enc_prompt_ids + d["enc_input_ids"]
+            d["dec_input_ids"] = dec_prompt_ids + d["dec_input_ids"]
+            d["label_ids"] = pad_ids + d["label_ids"]
+
+        max_enc_len += self.prompt_config["enc"]["prompt_len"]
+        max_dec_len += self.prompt_config["dec"]["prompt_len"]
+
+        return data, max_enc_len, max_dec_len
 
     def __len__(self):
         return len(self.data)
@@ -91,7 +110,10 @@ class T5Dataset(Dataset):
             no_model_data["idx"][i] = samp["idx"]
             if not self.do_infer:
                 no_model_data["labels"][i][:len(samp["label_ids"])] = torch.tensor(samp["label_ids"], dtype=torch.long)
-                no_model_data["loss_mask"][i][:len(samp["label_ids"])] = 1.0
+                if self.prompt_config is not None:
+                    no_model_data["loss_mask"][i][self.prompt_config["dec"]["prompt_len"]:len(samp["label_ids"])] = 1.0
+                else:
+                    no_model_data["loss_mask"][i][:len(samp["label_ids"])] = 1.0
 
         if self.args.fp16:
             model_data["enc_attention_mask"] = model_data["enc_attention_mask"].half()
@@ -102,8 +124,8 @@ class T5Dataset(Dataset):
 
 
 class TNewsDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(TNewsDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(TNewsDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
 
@@ -155,8 +177,8 @@ class TNewsDataset(T5Dataset):
 
 
 class OCNLIDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(OCNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(OCNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
 
@@ -197,8 +219,8 @@ class OCNLIDataset(T5Dataset):
 
 
 class AFQMCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(AFQMCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(AFQMCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
 
@@ -237,8 +259,8 @@ class AFQMCDataset(T5Dataset):
 
 
 class IFLYTEKDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
-        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(IFLYTEKDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
 
@@ -277,8 +299,8 @@ class IFLYTEKDataset(T5Dataset):
 
 
 class CMNLIDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(CMNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(CMNLIDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
 
@@ -319,8 +341,8 @@ class CMNLIDataset(T5Dataset):
 
 
 class CSLDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(CSLDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(CSLDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
 
@@ -384,8 +406,8 @@ def cut_to_max_len(prefix, postfix, max_len):
 
 
 class CHIDDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
-        super(CHIDDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(CHIDDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
         data = []
@@ -463,8 +485,8 @@ class CHIDDataset(T5Dataset):
 
 
 class CHIDDataset2(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(CHIDDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(CHIDDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
         data = []
@@ -557,8 +579,8 @@ class CHIDDataset2(T5Dataset):
 
 
 class CMRCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
-        super(CMRCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(CMRCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
         with open(self.path, "r") as f:
@@ -634,8 +656,8 @@ class CMRCDataset(T5Dataset):
 
 
 class C3Dataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
-        super(C3Dataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(C3Dataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
     
     def process_data(self):
         data = []
@@ -675,8 +697,8 @@ class C3Dataset(T5Dataset):
 
 
 class C3Dataset2(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(C3Dataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(C3Dataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
     
     def process_data(self):
         data = []
@@ -727,8 +749,8 @@ class C3Dataset2(T5Dataset):
 
 
 class WSCDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(WSCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(WSCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
         data = []
@@ -768,8 +790,8 @@ class WSCDataset(T5Dataset):
 
 
 class CombinedDataset(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False):
-        super(CombinedDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(CombinedDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
         
@@ -807,8 +829,8 @@ class CombinedDataset(T5Dataset):
 
 
 class WSCDataset2(T5Dataset):
-    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False):
-        super(WSCDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer)
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(WSCDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
 
     def process_data(self):
         data = []
