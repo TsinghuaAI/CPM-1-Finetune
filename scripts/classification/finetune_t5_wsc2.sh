@@ -35,16 +35,17 @@ CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 # CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune/results/t5_finetune_wsc2_lr0.000005const_drop"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_wsc2_lr0.000005const_drop_test_save/"
+LR=${1-0.000005}
+
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_wsc2_lr${LR}linear_drop_right/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 BATCH_SIZE=16
 GRAD_ACC=2
-LR=0.000005
-TRAIN_ITER=20000
-EPOCHS=22
+TRAIN_ITER=-1
+EPOCHS=60
 
 ENC_LEN=512
 DEC_LEN=256
@@ -71,12 +72,12 @@ OPTS+=" --split 949,50,1"
 OPTS+=" --distributed-backend nccl"
 OPTS+=" --lr ${LR}"
 OPTS+=" --no-load-optim"
-OPTS+=" --lr-decay-style constant"
+OPTS+=" --lr-decay-style linear"
 OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
-OPTS+=" --save-interval 80"
+OPTS+=" --save-interval 100000"
 OPTS+=" --eval-interval 10"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 2"
@@ -90,7 +91,7 @@ OPTS+=" --do_valid"
 OPTS+=" --do_eval"
 # OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
-OPTS+=" --max-save 3"
+# OPTS+=" --max-save 3"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
 

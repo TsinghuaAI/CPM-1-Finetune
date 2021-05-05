@@ -38,7 +38,7 @@ CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 LR=${1-0.00005}
 SCHE=${2-constant}
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_wsc2_lr${LR}${SCHE}_prompt/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_wsc2_lr${LR}${SCHE}_prompt_insert/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_wsc_prompt.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
@@ -48,7 +48,7 @@ PROMPT_CONFIG="${WORKING_DIR}/configs/prompt/simple.json"
 BATCH_SIZE=16
 GRAD_ACC=2
 TRAIN_ITER=-1
-EPOCHS=120
+EPOCHS=100
 
 ENC_LEN=512
 DEC_LEN=256
@@ -67,7 +67,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name wsc2"
+OPTS+=" --data-name wsc3"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"

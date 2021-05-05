@@ -56,7 +56,7 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CMNLIDataset, CMRCDataset, CSLDataset, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2
+from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CMNLIDataset, CMRCDataset, CSLDataset, CSLDataset2, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2, WSCDataset3
 
 import torch.nn.functional as F
 
@@ -228,6 +228,9 @@ def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidd
     
     if not do_infer:
         losses = mpu.vocab_parallel_cross_entropy(logits.contiguous().float(), no_model_batch["labels"])
+        # if torch.distributed.get_rank() == 0:
+        #     print(losses)
+
         loss_mask = no_model_batch["loss_mask"]
         losses = (losses * loss_mask).sum(-1) / loss_mask.sum(-1)
         loss = losses.mean()
@@ -321,6 +324,7 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
             if args.eval_interval and global_step % args.eval_interval == 0 and step % args.gradient_accumulation_steps == 0 and args.do_valid:
                 prefix = 'iteration {} | '.format(global_step)
                 eval_loss, acc = eval_func(args, tokenizer, data_config, dev_dataset, dev_dataloader, model, device, mode="dev")
+                model.train()
                 log_string = prefix + " eval_loss: " + str(eval_loss) + " | eval acc: " + str(acc)
                 print_rank_0(log_string)
                 save_rank_0(args, log_string)
@@ -359,6 +363,7 @@ def evaluate(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_d
     all_idx = []
     all_preds = []
     all_labels = []
+    all_L = []
 
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
@@ -372,6 +377,13 @@ def evaluate(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_d
             gathered_logits = torch.cat(logits_list, dim=-1)
 
             pred_token_logits = gathered_logits[:, 1, :]
+            # pred_token_logits = -F.log_softmax(pred_token_logits, dim=-1)
+            # labels = no_model_batch["labels"][:, 1]
+            # if torch.distributed.get_rank() == 0:
+            #     L = [p[x] for p, x in zip(pred_token_logits.cpu().tolist(), labels.cpu().tolist())]
+            #     print(L)
+            #     all_L.extend(L)
+
             preds = torch.argmax(pred_token_logits, dim=-1)
             gathered_preds = [torch.zeros_like(preds) for _ in range(mpu.get_data_parallel_world_size())]
             torch.distributed.all_gather(gathered_preds, preds.contiguous(), mpu.get_data_parallel_group())
@@ -393,6 +405,10 @@ def evaluate(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_d
 
     all_idx = torch.cat(all_idx, dim=0).cpu().tolist()
     all_preds = torch.cat(all_preds, dim=0).cpu().tolist()
+
+    # if torch.distributed.get_rank() == 0:
+    #     print(sum(all_L) / len(all_L))
+    # #     print(all_preds)
 
     if mode == "infer":
         return data_config[args.data_name]["infer_func"](args, tokenizer, all_idx, all_preds)
@@ -710,9 +726,6 @@ def main():
                 prompt_config[t]["init_ids"].extend(tokenizer.convert_tokens_to_ids([prompt_config[t]["default_init_token"] for _ in range(pad_num)]))
                 prompt_config[t]["init_ids"] = torch.tensor(prompt_config[t]["init_ids"], dtype=torch.long).to(device)
 
-    # Model, optimizer, and learning rate.
-    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config, prompt_config)
-
     data_config = {
         "tnews": {
             "dataset": TNewsDataset,
@@ -796,12 +809,37 @@ def main():
             "dataset": CombinedDataset,
             "eval_func": evaluate,
             "cache_path": args.data_path
+        },
+        "csl2": {
+            "dataset": CSLDataset2,
+            "eval_func": evaluate,
+            "cache_path": None,
+            "infer_func": infer_csl
+        },
+        "wsc3": {
+            "dataset": WSCDataset3,
+            "eval_func": evaluate_gen,
+            "cache_path": None,
+            "infer_func": infer_wsc2
         }
     }
 
     if args.do_train:
         train_dataloader, train_dataset = load_data(args, data_config, 'train', tokenizer, prompt_config, ratio=1)
         dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1)
+        if args.train_iters == -1:
+            args.train_iters = len(train_dataset) * args.epochs // (mpu.get_data_parallel_world_size() * args.batch_size * args.gradient_accumulation_steps)
+    else:
+        args.train_iters = 10 # a magic number
+
+    log_string = "Total train epochs {} | Total train iters {} | ".format(args.epochs, args.train_iters)
+    print_rank_0(log_string)
+    save_rank_0(args, log_string)
+
+    # Model, optimizer, and learning rate.
+    model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config, prompt_config)
+        
+    if args.do_train:
         train(args, data_config, tokenizer, model, optimizer, lr_scheduler, train_dataset, train_dataloader, dev_dataset, dev_dataloader, device)
 
     if args.do_eval:

@@ -32,21 +32,24 @@ CACHE_PATH="/cache/"
 DATA_PATH="/mnt/sfs_turbo/data/CLUE/csl"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
-# CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
-CKPT_PATH="${WORKING_DIR}/results/t5_finetune_csl_lr0.000005const/"
+CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_csl_lr0.000005const/"
+LR=${1-0.00005}
+SCHE=${2-constant}
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_csl_lr${LR}${SCHE}_scale200_prompt_insert/"
+
 LOG_FILE="${SAVE_PATH}/log.txt"
-DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
+DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_csl_prompt.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
-BATCH_SIZE=4
-GRAD_ACC=8
-LR=0.000005
-TRAIN_ITER=20000
-EPOCHS=5
+PROMPT_CONFIG="${WORKING_DIR}/configs/prompt/simple.json"
 
-ENC_LEN=512
+BATCH_SIZE=2
+GRAD_ACC=16
+TRAIN_ITER=-1
+EPOCHS=20
+
+ENC_LEN=768
 DEC_LEN=256
 
 
@@ -63,7 +66,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name csl"
+OPTS+=" --data-name csl2"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"
@@ -71,12 +74,12 @@ OPTS+=" --split 949,50,1"
 OPTS+=" --distributed-backend nccl"
 OPTS+=" --lr ${LR}"
 OPTS+=" --no-load-optim"
-OPTS+=" --lr-decay-style constant"
+OPTS+=" --lr-decay-style ${SCHE}"
 OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
-OPTS+=" --save-interval 600"
+OPTS+=" --save-interval 10000"
 OPTS+=" --eval-interval 100"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
@@ -85,10 +88,12 @@ OPTS+=" --deepspeed-activation-checkpointing"
 OPTS+=" --fp16"
 OPTS+=" --deepspeed"
 OPTS+=" --deepspeed_config ${DS_CONFIG}"
-# OPTS+=" --do_train"
-# OPTS+=" --do_valid"
+OPTS+=" --do_train"
+OPTS+=" --do_valid"
 # OPTS+=" --do_eval"
-OPTS+=" --do_infer"
+OPTS+=" --prompt_tune"
+OPTS+=" --prompt_config ${PROMPT_CONFIG}"
+# OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"

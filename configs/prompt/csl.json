@@ -1,0 +1,12 @@
+{
+    "enc": {
+        "prompt_len": 100,
+        "init_tokens": "正确错误",
+        "default_init_token": "<mask>"
+    },
+    "dec": {
+        "prompt_len": 0,
+        "init_tokens": "",
+        "default_init_token": "<mask>"
+    }
+}

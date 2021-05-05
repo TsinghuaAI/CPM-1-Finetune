@@ -631,11 +631,15 @@ class ParallelTransformer(nn.Module):
         if self.prompt_config is None:
             return self.word_embeds(input_ids)
         
-        prompt_len = self.prompt_config["prompt_len"]
-        p_embeds = self.prompt_embeds(input_ids[:, :prompt_len])
-        w_embeds = self.word_embeds(input_ids[:, prompt_len:])
+        prompt_mask = (input_ids < 0).long()
+        word_mask = (input_ids >= 0).long()
+        prompt_ids = (-(input_ids * prompt_mask)) - prompt_mask
+        word_ids = word_mask * input_ids
 
-        return torch.cat([p_embeds, w_embeds], dim=1) # bs * seq_len * hidden
+        p_embeds = self.prompt_embeds(prompt_ids) * prompt_mask.float().unsqueeze(-1)
+        w_embeds = self.word_embeds(word_ids) * word_mask.float().unsqueeze(-1)
+
+        return p_embeds + w_embeds # bs * seq_len * hidden
 
     def forward(
         self,

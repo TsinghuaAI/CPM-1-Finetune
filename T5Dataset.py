@@ -41,8 +41,8 @@ class T5Dataset(Dataset):
         else:
             self.data, self.max_enc_len, self.max_dec_len = self.process_data()
 
-        if prompt_config is not None:
-            self.data, self.max_enc_len, self.max_dec_len = self.add_prompt_ids(self.data, self.max_enc_len, self.max_dec_len)
+        # if prompt_config is not None:
+        #     self.data, self.max_enc_len, self.max_dec_len = self.add_prompt_ids(self.data, self.max_enc_len, self.max_dec_len)
 
         if do_infer:
             total_eval_batch_size = mpu.get_data_parallel_world_size() * args.batch_size
@@ -844,7 +844,105 @@ class WSCDataset2(T5Dataset):
             
             if self.do_infer or self.split in ["dev", "test"] or d["label"] == "true":
                 context = d["text"]
-                context = self.tokenizer.encode(context[:d["target"]["span2_index"]]) + [495] + self.tokenizer.encode(d["target"]["span2_text"]) + [495] + self.tokenizer.encode(context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):])
+                if self.prompt_config is not None:
+                    prompt_len = self.prompt_config["enc"]["prompt_len"]
+                    context = [-(i + 1) for i in range(prompt_len)] + self.tokenizer.encode(context[:d["target"]["span2_index"]]) + [495] + self.tokenizer.encode(d["target"]["span2_text"]) + [495] + self.tokenizer.encode(context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):])
+                else:
+                    context = self.prefix_ids + context
+                target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(d["target"]["span1_text"]) if not self.do_infer else [self.tokenizer.pad_id])
+                if self.add_target_post:
+                    target += [self.tokenizer.get_sentinel_id(1)]
+                data.append({
+                    "idx": d["id"] if self.do_infer else self.idx,
+                    "enc_input_ids": context,
+                    "dec_input_ids": target[:-1],
+                    "label_ids": target[1:],
+                    "cand_ids": d["target"]["span1_text"],
+                    "truth": (1 if d["label"] == "true" else 0) if not self.do_infer else None
+                })
+
+                enc_sizes.append(len(context))
+                dec_sizes.append(len(target) - 1)
+                self.idx += 1
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class CSLDataset2(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(CSLDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+
+    def process_data(self):
+
+        self.label_word_map = {
+            "0": "错误",
+            "1": "正确",
+        }
+    
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+        
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        
+        for line in lines[:int(self.ratio * len(lines))]:
+            d = json.loads(line)
+            context = self.tokenizer.encode(d["abst"])
+            # key_words = self.tokenizer.encode("关键词：")
+            key_words = []
+            for x in d["keyword"]:
+                key_words += self.tokenizer.encode(x) + [16]
+            # key_words = key_words[:-1]
+            if self.prompt_config:
+                prompt_len = self.prompt_config["enc"]["prompt_len"]
+                context = self.prefix_ids + [-(i + 1) for i in range(prompt_len // 2)] + key_words + [-(i + 1) for i in range(prompt_len // 2, prompt_len)] + context[:self.enc_seq_length - len(key_words)]
+            else:
+                context = self.prefix_ids + key_words + context[:self.enc_seq_length - len(key_words)]
+                
+            target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
+            if self.add_target_post:
+                target += [self.tokenizer.get_sentinel_id(1)]
+            data.append({
+                "idx": d["id"] if self.do_infer else self.idx,
+                "enc_input_ids": context,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+            enc_sizes.append(len(context))
+            dec_sizes.append(len(target) - 1)
+            self.idx += 1
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+
+class WSCDataset3(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(WSCDataset3, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+
+    def process_data(self):
+        data = []
+        enc_sizes, dec_sizes = [], []
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+
+        for line in lines[:int(self.ratio * len(lines))]:
+            d = json.loads(line)
+            
+            if self.do_infer or self.split in ["dev", "test"] or d["label"] == "true":
+                context = d["text"]
+                if self.prompt_config:
+                    prompt_len = self.prompt_config["enc"]["prompt_len"]
+                    context = [-(i + 1) for i in range(prompt_len - 2)] + self.tokenizer.encode(context[:d["target"]["span2_index"]]) + [-(prompt_len - 1)] + self.tokenizer.encode(d["target"]["span2_text"]) + [-prompt_len] + self.tokenizer.encode(context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):])
+                else:
+                    context = self.tokenizer.encode(context[:d["target"]["span2_index"]]) + [495] + self.tokenizer.encode(d["target"]["span2_text"]) + [495] + self.tokenizer.encode(context[d["target"]["span2_index"] + len(d["target"]["span2_text"]):])
                 context = self.prefix_ids + context
                 target = [1, self.tokenizer.get_sentinel_id(0)] + (self.tokenizer.encode(d["target"]["span1_text"]) if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
