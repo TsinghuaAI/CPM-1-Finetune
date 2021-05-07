@@ -578,6 +578,103 @@ class CHIDDataset2(T5Dataset):
         return samples, enc_sizes, dec_sizes
 
 
+class CHIDDataset3(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(CHIDDataset3, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+
+    def process_data(self):
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        
+        ans_d = None
+        if not self.do_infer:
+            with open(self.path.replace(".json", "_answer.json"), "r") as f:
+                ans_d = json.load(f)
+
+        with open(os.path.join(self.args.data_path, "idiom_2_id.json"), "r") as f:
+            idiom_2_id = json.load(f)
+
+        for line in lines[:int(self.ratio * len(lines))]:
+            d = json.loads(line)
+            for sent in d["content"]:
+                samples, tmp_enc_sizes, tmp_dec_sizes = self.process_one_sent(sent, ans_d, d["candidates"], idiom_2_id)
+                data.extend(samples)
+                enc_sizes.extend(tmp_enc_sizes)
+                dec_sizes.extend(tmp_dec_sizes)
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+    def process_one_sent(self, sent, answers, cands, idiom_2_id):
+
+        number_map = [
+            50, # 一
+            230,
+            156,
+            349,
+            443,
+            803,
+            950,
+            1031, # 八
+            1189, # 九
+            1320
+        ]
+
+        pattern = re.compile(r"#idiom(\d+)#")
+        start = 0
+        samples = []
+        enc_sizes, dec_sizes = [], []
+        cands_ids = self.tokenizer.encode("选项：")
+        for i, cand in enumerate(cands):
+            # cand = list(cand.strip())
+            cands_ids.extend([number_map[i], 20] + [idiom_2_id[cand] + self.tokenizer.vocab_size] + [16])
+
+        while True:
+            m = pattern.search(sent, start)
+            if m is None:
+                break
+            
+            context_ids = self.tokenizer.encode("上下文：")
+    
+            prefix = self.tokenizer.encode(re.sub(pattern, "", sent[:m.start()]))
+            postfix = self.tokenizer.encode(re.sub(pattern, "", sent[m.end():]))
+    
+            max_len = self.enc_seq_length - len(cands_ids) - len(context_ids) - 1
+            prefix, postfix = cut_to_max_len(prefix, postfix, max_len)
+            context_ids.extend(prefix + [self.tokenizer.get_sentinel_id(0)] + postfix)
+    
+            ids = cands_ids + context_ids
+    
+            assert len(ids) <= self.enc_seq_length, (len(ids), max_len, len(prefix), len(postfix))
+
+            ids = self.prefix_ids + ids
+
+            target = [1, self.tokenizer.get_sentinel_id(0)] + ([number_map[answers[m.group()]]] if not self.do_infer else [self.tokenizer.pad_id])
+            if self.add_target_post:
+                target += [self.tokenizer.get_sentinel_id(1)]
+            
+            samples.append({
+                "idx": int(m.group(1)) if self.do_infer else self.idx,
+                "enc_input_ids": ids,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:]
+            })
+
+            enc_sizes.append(len(ids))
+            dec_sizes.append(len(target) - 1)
+            self.idx += 1
+    
+            start = m.end()
+
+        return samples, enc_sizes, dec_sizes
+
+
 class CMRCDataset(T5Dataset):
     def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
         super(CMRCDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)

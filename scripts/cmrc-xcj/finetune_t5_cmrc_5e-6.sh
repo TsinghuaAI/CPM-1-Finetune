@@ -26,6 +26,14 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
 # Change for multinode config
 MP_SIZE=4
 
+BATCH_SIZE=4
+GRAD_ACC=8
+LR=0.000005
+
+TRAIN_ITER=20000
+EPOCHS=10
+
+
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
@@ -33,18 +41,13 @@ DATA_PATH="/mnt/sfs_turbo/data/CLUE/cmrc"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
-# CKPT_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr0.000005const_dropout_fix2/"
+# CKPT_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr${LR}const_dropout_fix2/"
 
-SAVE_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr0.000005const_dropout_fix2/"
+SAVE_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr${LR}const_dropout_fix2/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
-BATCH_SIZE=4
-GRAD_ACC=8
-LR=0.000005
-TRAIN_ITER=20000
-EPOCHS=5
 
 ENC_LEN=512
 DEC_LEN=256

@@ -13,6 +13,7 @@ from .layers import RowParallelLinear
 from .mappings import gather_from_model_parallel_region
 
 import deepspeed
+import pickle
 
 from .random import checkpoint
 from .random import get_cuda_rng_tracker
@@ -587,7 +588,7 @@ class ParallelBlock(nn.Module):
 
 
 class ParallelTransformer(nn.Module):
-    def __init__(self, config: EncDecConfig, word_embeds: VocabParallelEmbedding, prompt_config=None, is_decoder=False, checkpoint_activations=False, checkpoint_num_layers=1):
+    def __init__(self, config: EncDecConfig, word_embeds: VocabParallelEmbedding, data_hack=None, prompt_config=None, is_decoder=False, checkpoint_activations=False, checkpoint_num_layers=1):
         super(ParallelTransformer, self).__init__()
         
         self.word_embeds = word_embeds
@@ -602,6 +603,15 @@ class ParallelTransformer(nn.Module):
         self.checkpoint_activations = checkpoint_activations
         self.checkpoint_num_layers = checkpoint_num_layers
         self.is_decoder = is_decoder
+        self.data_hack = data_hack
+        if self.data_hack == "chid":
+            if not self.is_decoder:
+                print("loading /mnt/sfs_turbo/data/CLUE/chid/id_2_vec.pkl")
+                with open("/mnt/sfs_turbo/data/CLUE/chid/id_2_vec.pkl", "rb") as f:
+                    t = pickle.load(f)
+                t = torch.tensor(t)
+                self.idiom_fc = nn.Linear(t.size(1), config.d_model)
+                self.add_embeds = nn.Embedding.from_pretrained(t, freeze=False)
 
         output_layer_init_method = None
         if config.use_scaled_init_for_output_weights:
@@ -628,18 +638,34 @@ class ParallelTransformer(nn.Module):
             self.prompt_embeds = nn.Embedding(self.prompt_config["prompt_len"], self.config.d_model).from_pretrained(prompt_weights, freeze=False)
 
     def get_input_embeds(self, input_ids):
-        if self.prompt_config is None:
+        p_embeds = None
+        if self.prompt_config is not None:
+            prompt_mask = (input_ids < 0).long()
+            prompt_ids = (-(input_ids * prompt_mask)) - prompt_mask
+            p_embeds = self.prompt_embeds(prompt_ids) * prompt_mask.float().unsqueeze(-1)
+
+        if self.prompt_config is None and self.data_hack is None:
             return self.word_embeds(input_ids)
         
-        prompt_mask = (input_ids < 0).long()
-        word_mask = (input_ids >= 0).long()
-        prompt_ids = (-(input_ids * prompt_mask)) - prompt_mask
-        word_ids = word_mask * input_ids
+        a_embeds = None
+        if self.data_hack == "chid":
+            if not self.is_decoder:
+                idiom_mask = (input_ids >= self.config.vocab_size).long()
+                idiom_ids = (input_ids * idiom_mask) - self.config.vocab_size * idiom_mask
+                if torch.distributed.get_rank() == 0:
+                    print(idiom_ids.cpu().tolist())
+                a_embeds = self.idiom_fc(self.add_embeds(idiom_ids)) * idiom_mask.float().unsqueeze(-1)
 
-        p_embeds = self.prompt_embeds(prompt_ids) * prompt_mask.float().unsqueeze(-1)
+        word_mask = (0 <= input_ids).long() * (input_ids < self.config.vocab_size).long()
+        word_ids = word_mask * input_ids
         w_embeds = self.word_embeds(word_ids) * word_mask.float().unsqueeze(-1)
 
-        return p_embeds + w_embeds # bs * seq_len * hidden
+        if p_embeds is not None:
+            w_embeds = w_embeds + p_embeds
+        if a_embeds is not None:
+            w_embeds = w_embeds + a_embeds
+
+        return w_embeds # bs * seq_len * hidden
 
     def forward(
         self,

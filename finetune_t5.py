@@ -56,7 +56,7 @@ import torch.distributed as dist
 from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
-from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CMNLIDataset, CMRCDataset, CSLDataset, CSLDataset2, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2, WSCDataset3
+from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CHIDDataset3, CMNLIDataset, CMRCDataset, CSLDataset, CSLDataset2, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2, WSCDataset3
 
 import torch.nn.functional as F
 
@@ -73,6 +73,7 @@ def get_model(args, vocab_size, prompt_config=None):
                         parallel_output=True,
                         checkpoint_activations=args.checkpoint_activations,
                         checkpoint_num_layers=args.checkpoint_num_layers,
+                        data_hack="chid" if args.data_name == "chid3" else None,
                         prompt_config=prompt_config)
 
     if mpu.get_data_parallel_rank() == 0:
@@ -474,7 +475,7 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, data_config, eval_dataset: T5
             # we only use the <go> token, so truncate other tokens
             dec_input_ids = model_batch['dec_input_ids'][..., :1]
             dec_attention_mask = model_batch['dec_attention_mask'][..., :1, :1]
-            # # we use past_key_values, so only the current token mask is needed
+            # we use past_key_values, so only the current token mask is needed
             cross_attention_mask = model_batch['cross_attention_mask'][..., :1, :]
 
             unfinished_sents = model_batch['enc_input_ids'].new(model_batch['enc_input_ids'].size(0)).fill_(1)
@@ -496,6 +497,7 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, data_config, eval_dataset: T5
                         past_key_values=past_key_values,
                     )
                     lm_logits = dec_outputs["lm_logits"]
+                    
                     past_key_values = dec_outputs['past_key_values']
 
                     gathered_lm_logits = [torch.zeros_like(lm_logits).to(device) for _ in range(mpu.get_model_parallel_world_size())]
@@ -504,6 +506,7 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, data_config, eval_dataset: T5
                     lm_logits = torch.cat(gathered_lm_logits, dim=-1)
 
                     next_token_logits = lm_logits[:, -1, :]
+                    # print_rank_0(next_token_logits)
                     next_token = torch.argmax(next_token_logits, dim=-1)
                     # next_token_logscores = top_k_logits(next_token_logits, top_k=args.top_k, top_p=args.top_p)
                     # probs = F.softmax(next_token_logscores, dim=-1)
@@ -576,6 +579,7 @@ def wsc2_metric(tokenizer: EncDecTokenizer, all_preds, all_labels, all_truth):
 def cmrc_metric(tokenizer: EncDecTokenizer, all_preds, data):
     print("Doing cmrc metric")        
     all_preds = [tokenizer.decode(p[1:-1]) for p in all_preds]
+    # print(all_preds)
     res = [int(p in d["truth"]) for p, d in zip(all_preds, data)]
 
     acc = sum(res) / len(res)
@@ -821,7 +825,13 @@ def main():
             "eval_func": evaluate_gen,
             "cache_path": None,
             "infer_func": infer_wsc2
-        }
+        },
+        "chid3": {
+            "dataset": CHIDDataset3,
+            "eval_func": evaluate,
+            "cache_path": None,
+            "infer_func": infer_chid2
+        },
     }
 
     if args.do_train:
