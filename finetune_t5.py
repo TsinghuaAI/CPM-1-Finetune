@@ -979,7 +979,7 @@ def main():
 
     if args.do_train:
         train_dataloader, train_dataset = load_data(args, data_config, 'train', tokenizer, prompt_config, ratio=1)
-        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1, drop_last=False)
+        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1) #, drop_last=False)
         if args.train_iters == -1:
             args.train_iters = len(train_dataset) * args.epochs // (mpu.get_data_parallel_world_size() * args.batch_size * args.gradient_accumulation_steps)
     else:
