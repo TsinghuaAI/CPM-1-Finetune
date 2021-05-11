@@ -211,6 +211,8 @@ def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidd
     for k in model_batch:
         model_batch[k] = model_batch[k].to(device)
     for k in no_model_batch:
+        # if type(no_model_batch[k]) == list:
+        #     continue
         no_model_batch[k] = no_model_batch[k].to(device)
 
     if keep_enc_hidden:
@@ -562,6 +564,141 @@ def evaluate_gen(args, tokenizer: EncDecTokenizer, data_config, eval_dataset: T5
         return total_loss, acc
 
 
+def evaluate_span_extraction(args, tokenizer: EncDecTokenizer, data_config, eval_dataset: T5Dataset, eval_data_loader, model, device, mode="dev"):
+    """Evaluation."""
+
+    # Turn on evaluation mode which disables dropout.
+    model.eval()
+
+    total_loss = 0.0
+    step = 0
+
+    all_preds = []
+    all_labels = []
+    all_idx = []
+
+
+    with torch.no_grad():
+        for model_batch, no_model_batch in eval_data_loader:
+            # span_from_batch = model_batch["enc_input_ids"].tolist()
+            # print("before the model calculation ", no_model_batch["span_from"][0].sum(), no_model_batch["span_from"][1].sum(), no_model_batch["span_from"][2].sum(), no_model_batch["span_from"][3].sum())
+            forw_out = forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=True, do_infer=(mode=="infer"))
+            loss = forw_out["loss"].item() if "loss" in forw_out else 0
+            total_loss += loss
+
+            enc_hidden_states = forw_out["enc_hidden_states"]
+
+            # for generating responses
+            # we only use the <go> token, so truncate other tokens
+            dec_input_ids = model_batch['dec_input_ids'][..., :1]
+            dec_attention_mask = model_batch['dec_attention_mask'][..., :1, :1]
+            # we use past_key_values, so only the current token mask is needed
+            cross_attention_mask = model_batch['cross_attention_mask'][..., :1, :]
+
+            unfinished_sents = model_batch['enc_input_ids'].new(model_batch['enc_input_ids'].size(0)).fill_(1)
+            output_ids = model_batch['enc_input_ids'].new_zeros([model_batch['enc_input_ids'].size(0), 0])
+            past_key_values = None
+
+            gen_len = 0
+            # now_pos = None
+            # print("after the model calculation ", no_model_batch["span_from"][0].sum(), no_model_batch["span_from"][1].sum(), no_model_batch["span_from"][2].sum(), no_model_batch["span_from"][3].sum())
+            while gen_len < args.dec_seq_length:
+                if unfinished_sents.max() == 0:
+                    tokens_to_add = tokenizer.pad_id * (1 - unfinished_sents)
+                    output_ids = torch.cat([output_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
+
+                else:
+                    dec_outputs = model(
+                        dec_input_ids=dec_input_ids,
+                        dec_attention_mask=dec_attention_mask,
+                        cross_attention_mask=cross_attention_mask,
+                        enc_hidden_states=enc_hidden_states,
+                        past_key_values=past_key_values,
+                    )
+                    lm_logits = dec_outputs["lm_logits"]
+
+                    past_key_values = dec_outputs['past_key_values']
+
+                    gathered_lm_logits = [torch.zeros_like(lm_logits).to(device) for _ in range(mpu.get_model_parallel_world_size())]
+                    torch.distributed.all_gather(gathered_lm_logits, lm_logits.data, mpu.get_model_parallel_group())
+
+                    lm_logits = torch.cat(gathered_lm_logits, dim=-1)
+
+                    next_token_logits = lm_logits[:, -1, :]
+                    # print_rank_0(next_token_logits)
+                    # next_token = torch.argmax(next_token_logits, dim=-1)
+                    # if (next_token == 5).any():
+                    #     print(next_token)
+                    # next_token, now_pos = limit_vocab(next_token_logits, no_model_batch["span_from"], now_pos)
+                    # next_token = torch.tensor(next_token, dtype=torch.long).to(device)
+                    # next_token = limit_vocab1(next_token_logits, no_model_batch["span_from"])
+
+                    # normal = torch.argmax(next_token_logits, dim=-1)
+                    next_token = torch.argmax(next_token_logits + no_model_batch["span_from"] * 1000, dim=-1)
+                    # print_rank_0("next_token %s %s" % (gen_len, torch.argmax(next_token_logits, dim=-1).tolist()))
+                    # print_rank_0("next_token_logits %s %s" % (gen_len, next_token_logits.tolist()))
+                    # print_rank_0("next_token + logits %s %s" % (gen_len, torch.argmax(next_token_logits + no_model_batch["span_from"] * 1000, dim=-1).tolist()))
+                    # print_rank_0("next_token_logits + logits %s %s" % (gen_len, (next_token_logits + no_model_batch["span_from"] * 1000).tolist()))
+                    # print_rank_0("==" * 20)
+
+                    # if (normal == 5).any():
+                    #     print(next_token, torch.argmax(next_token_logits, dim=-1))
+                    #     print(next_token_logits[:,:10])
+                    #     print(no_model_batch["span_from"][:,:10])
+
+                    tokens_to_add = next_token * unfinished_sents + tokenizer.pad_id * (1 - unfinished_sents)
+
+                    dec_input_ids = tokens_to_add.unsqueeze(-1)
+                    output_ids = torch.cat([output_ids, tokens_to_add.unsqueeze(-1)], dim=-1)
+                    # let the current token attend to all previous tokens
+                    dec_attention_mask = torch.cat([dec_attention_mask, dec_attention_mask[:, :, :, -1:]], dim=-1)
+
+                gen_len += 1
+                unfinished_sents.mul_(tokens_to_add.ne(tokenizer.get_sentinel_id(1)).long())
+            
+            gathered_preds = [torch.zeros_like(output_ids) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_preds, output_ids, mpu.get_data_parallel_group())
+            all_preds.extend(gathered_preds)
+
+            # print_rank_0(gathered_preds)
+            
+            gathered_idx = [torch.zeros_like(no_model_batch["idx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_idx, no_model_batch["idx"].contiguous(), mpu.get_data_parallel_group())
+            all_idx.extend(gathered_idx)
+
+            if mode != "infer":
+                gathered_labels = [torch.zeros_like(no_model_batch["labels"]) for _ in range(mpu.get_data_parallel_world_size())]
+                torch.distributed.all_gather(gathered_labels, no_model_batch["labels"], mpu.get_data_parallel_group())
+                all_labels.extend(gathered_labels)
+
+            step += 1
+
+    total_loss /= step
+
+    all_idx = torch.cat(all_idx, dim=0).cpu().tolist()
+    all_preds = torch.cat(all_preds, dim=0).cpu().tolist()
+    all_preds = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_preds]
+    if args.data_name in ["wsc2"]:
+        all_preds = [tokenizer.decode(p[1:-1]) for p in all_preds]
+        all_preds = [int(p in d["cand_ids"] or d["cand_ids"] in p) for p, d in zip(all_preds, eval_dataset.data)]
+
+    if mode == "infer":
+        return data_config[args.data_name]["infer_func"](args, tokenizer, all_idx, all_preds)
+    else:
+        if args.data_name == "wsc2":
+            all_labels = [d["truth"] for d in eval_dataset.data]
+        else:
+            all_labels = torch.cat(all_labels, dim=0).cpu().tolist()
+            all_labels = [e[:e.index(tokenizer.pad_id)] if tokenizer.pad_id in e else e for e in all_labels]
+        
+        if args.data_name in ["cmrc", "cmrc2"]:
+            acc = cmrc_metric(tokenizer, all_preds, eval_dataset.data)
+        else:
+            acc = sum([int(p == l) for p, l in zip(all_preds, all_labels)]) / len(all_preds)
+
+        return total_loss, acc
+
+
 def wsc2_metric(tokenizer: EncDecTokenizer, all_preds, all_labels, all_truth):
     all_preds = [p[1:-1] for p in all_preds]
     all_labels = [l[1:-1] for l in all_labels]
@@ -579,7 +716,7 @@ def wsc2_metric(tokenizer: EncDecTokenizer, all_preds, all_labels, all_truth):
 def cmrc_metric(tokenizer: EncDecTokenizer, all_preds, data):
     print("Doing cmrc metric")        
     all_preds = [tokenizer.decode(p[1:-1]) for p in all_preds]
-    # print(all_preds)
+    print(all_preds)
     res = [int(p in d["truth"]) for p, d in zip(all_preds, data)]
 
     acc = sum(res) / len(res)
@@ -779,6 +916,12 @@ def main():
             "cache_path": None,
             "infer_func": infer_cmrc
         },
+        "cmrc2": {
+            "dataset": CMRCDataset,
+            "eval_func": evaluate_span_extraction,
+            "cache_path": None,
+            "infer_func": infer_cmrc
+        },
         "c3": {
             "dataset": C3Dataset,
             "eval_func": evaluate_gen,
@@ -836,7 +979,7 @@ def main():
 
     if args.do_train:
         train_dataloader, train_dataset = load_data(args, data_config, 'train', tokenizer, prompt_config, ratio=1)
-        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1)
+        dev_dataloader, dev_dataset  = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1, drop_last=False)
         if args.train_iters == -1:
             args.train_iters = len(train_dataset) * args.epochs // (mpu.get_data_parallel_world_size() * args.batch_size * args.gradient_accumulation_steps)
     else:

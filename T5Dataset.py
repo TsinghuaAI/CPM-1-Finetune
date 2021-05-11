@@ -87,17 +87,21 @@ class T5Dataset(Dataset):
             "enc_attention_mask": torch.zeros(bs, 1, self.max_enc_len, self.max_enc_len),
             "dec_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_dec_len),
             "cross_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_enc_len),
-            "dec_input_ids": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id
+            "dec_input_ids": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
         }
         if not self.do_infer:
             no_model_data = {
                 "idx": torch.zeros(bs, dtype=torch.long),
                 "labels": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
-                "loss_mask": torch.zeros(bs, self.max_dec_len)
+                "loss_mask": torch.zeros(bs, self.max_dec_len),
+                # "span_from": [samp["span_from"] for samp in samples] # list of list
+                "span_from": torch.zeros(bs, len(self.tokenizer), dtype=torch.long),
             }
         else:
             no_model_data = {
                 "idx": torch.zeros(bs, dtype=torch.long),
+                # "span_from": [samp["span_from"] for samp in samples] # list of list
+                "span_from": torch.zeros(bs, len(self.tokenizer), dtype=torch.long),
             }
 
         for i, samp in enumerate(samples):
@@ -108,6 +112,11 @@ class T5Dataset(Dataset):
             model_data["dec_attention_mask"][i][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
             model_data["cross_attention_mask"][i][0, :dec_len, :enc_len] = 1.0
             no_model_data["idx"][i] = samp["idx"]
+            if "span_from" in samp:
+                # print(samp["idx"], samp["span_from"])
+                for tokenid in samp["span_from"]:
+                    no_model_data["span_from"][i][tokenid] = 1
+            # print("in the collefn", no_model_data["span_from"][i].sum())
             if not self.do_infer:
                 no_model_data["labels"][i][:len(samp["label_ids"])] = torch.tensor(samp["label_ids"], dtype=torch.long)
                 if self.prompt_config is not None:
@@ -718,6 +727,7 @@ class CMRCDataset(T5Dataset):
                     enc_input_ids = self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("文章：")
 
                     max_len = self.enc_seq_length - len(fake_answer_ids) - len(enc_input_ids)
+                    context_ids = prefix + fake_answer_ids + postfix
                     prefix, postfix = cut_to_max_len(prefix, postfix, max_len)
 
                     enc_input_ids.extend(prefix + fake_answer_ids + postfix)
@@ -730,9 +740,11 @@ class CMRCDataset(T5Dataset):
                         "enc_input_ids": enc_input_ids,
                         "dec_input_ids": target[:-1],
                         "label_ids": target[1:],
-                        "truth": all_answers
+                        "truth": all_answers,
+                        "span_from": set(context_ids + [1, self.tokenizer.get_sentinel_id(0), self.tokenizer.get_sentinel_id(1), self.tokenizer.pad_id]),
+                        # "span_from": target + [self.tokenizer.pad_id], # context_ids + answer_ids + [1, self.tokenizer.get_sentinel_id(0), self.tokenizer.pad_id],
                     })
-
+                    # print("in the dataset", len(data[-1]["span_from"]))
                     enc_sizes.append(len(enc_input_ids))
                     dec_sizes.append(len(target) - 1)
                     self.idx += 1
