@@ -32,7 +32,7 @@ import shutil
 import deepspeed
 
 from arguments import get_args
-from data_utils.tokenization_enc_dec import EncDecTokenizer
+from data_utils.tokenization_enc_dec import EncDecTokenizer, MT5EncDecTokenizer
 from fp16 import FP16_Module
 from fp16 import FP16_Optimizer
 from learning_rates import AnnealingLR
@@ -535,6 +535,45 @@ def evaluate_rank(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, e
     return total_loss, float(right.float() / total.float())
 
 
+def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_data_loader, model, device, mode='dev'):
+    """Evaluation."""
+
+    # Turn on evaluation mode which disables dropout.
+    model.eval()
+
+    total_loss = 0.0
+    step = 0
+
+    all_idx = []
+    all_preds = []
+    all_labels = []
+    all_L = []
+
+    total = torch.tensor(0, dtype=torch.long).to(device)
+    right = torch.tensor(0, dtype=torch.long).to(device)
+    with torch.no_grad():
+        for model_batch, no_model_batch in eval_data_loader:
+            forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"))
+            loss = forw_out["loss"].item() if "loss" in forw_out else 0
+            total_loss += loss
+
+            score = forw_out["score"] # batch, 2
+            total += score.size()[0]
+            right += (torch.max(score, dim = 1)[1] == 0).int().sum()
+
+            step += 1
+    rank = mpu.get_model_parallel_rank()
+    if rank != 0:
+        total *= 0
+        right *= 0
+    torch.distributed.all_reduce(total, op=torch.distributed.ReduceOp.SUM, group=mpu.get_data_parallel_group())
+    torch.distributed.all_reduce(right, op=torch.distributed.ReduceOp.SUM, group=mpu.get_data_parallel_group())
+
+    total_loss /= step
+    return total_loss, float(right.float() / total.float())
+
+
+
 def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
     # This function has been mostly taken from huggingface conversational ai code at
     # https://medium.com/huggingface/how-to-build-a-state-of-the-art-conversational-ai-with-transfer-learning-2d818ac26313
@@ -961,7 +1000,10 @@ def main():
     device = torch.cuda.current_device()
 
     # setup tokenizer
-    tokenizer = EncDecTokenizer(os.path.join(args.tokenizer_path, 'vocab.txt'))
+    if args.mt5:
+        tokenizer = MT5EncDecTokenizer(args.tokenizer_path)
+    else:
+        tokenizer = EncDecTokenizer(os.path.join(args.tokenizer_path, 'vocab.txt'))
     
     with open(args.deepspeed_config, "r") as f:
         ds_config = json.load(f)

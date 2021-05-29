@@ -37,11 +37,11 @@ CKPT_PATH="/mnt/sfs_turbo/mt5_origin"
 
 BATCH_SIZE=8
 GRAD_ACC=4
-LR=0.00003
+LR=0.00005
 TRAIN_ITER=20000
 EPOCHS=10
 
-SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/0529/mt5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const/"
+SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/afterDel/mt5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/spiece.model"
