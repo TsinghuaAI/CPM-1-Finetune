@@ -269,7 +269,7 @@ class _RankCrossEntropy(torch.autograd.Function):
 
         return grad_input, None
 
-def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False, do_infer=False, valid = False):
+def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False, do_infer=False, quoter_valid = False):
     for k in model_batch:
         model_batch[k] = model_batch[k].to(device)
     for k in no_model_batch:
@@ -302,6 +302,10 @@ def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc
             loss_mask = torch.tensor(0, dtype=torch.long).to(logits.device)
         else:
             loss_mask = torch.tensor(1, dtype=torch.long).to(logits.device)
+        if quoter_valid:
+            forw_out["score"] = relevant_logit
+            forw_out["loss"] = 0
+            return forw_out
         score = relevant_logit.view(-1, 2) / args.temp
 
         losses = _RankCrossEntropy.apply(score, loss_mask)
@@ -544,33 +548,59 @@ def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset,
     total_loss = 0.0
     step = 0
 
-    all_idx = []
-    all_preds = []
+    all_qidx = []
+    all_cidx = []
+    all_logits = []
     all_labels = []
-    all_L = []
 
-    total = torch.tensor(0, dtype=torch.long).to(device)
-    right = torch.tensor(0, dtype=torch.long).to(device)
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
-            forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"))
+            forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"), quoter_valid=True)
             loss = forw_out["loss"].item() if "loss" in forw_out else 0
             total_loss += loss
 
-            score = forw_out["score"] # batch, 2
-            total += score.size()[0]
-            right += (torch.max(score, dim = 1)[1] == 0).int().sum()
+            score = forw_out["score"] # batch
+            gathered_logits = [torch.zeros_like(score) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_logits, score.contiguous(), mpu.get_data_parallel_group())
+            all_logits.extend(gathered_logits)
+            
+            gathered_qidx = [torch.zeros_like(no_model_batch["qidx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_qidx, no_model_batch["qidx"].contiguous(), mpu.get_data_parallel_group())
+            all_qidx.extend(gathered_qidx)
+
+            gathered_cidx = [torch.zeros_like(no_model_batch["cidx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_cidx, no_model_batch["cidx"].contiguous(), mpu.get_data_parallel_group())
+            all_cidx.extend(gathered_cidx)
+
+            gathered_labels = [torch.zeros_like(no_model_batch["label"]) for _ in range(mpu.get_data_parallel_world_size())]
+            torch.distributed.all_gather(gathered_labels, no_model_batch["label"].contiguous(), mpu.get_data_parallel_group())
+            all_labels.extend(gathered_labels)
 
             step += 1
+    
     rank = mpu.get_model_parallel_rank()
-    if rank != 0:
-        total *= 0
-        right *= 0
-    torch.distributed.all_reduce(total, op=torch.distributed.ReduceOp.SUM, group=mpu.get_data_parallel_group())
-    torch.distributed.all_reduce(right, op=torch.distributed.ReduceOp.SUM, group=mpu.get_data_parallel_group())
+
+    all_qidx = torch.cat(all_qidx, dim=0).cpu().tolist()
+    all_cidx = torch.cat(all_cidx, dim=0).cpu().tolist()
+    all_logits = torch.cat(all_logits, dim=0).cpu().tolist()
+    all_labels = torch.cat(all_labels, dim=0).cpu().tolist()
+
+    pred = {}
+    for qid, cid, logit, label in zip(all_qidx, all_cidx, all_logits, all_labels):
+        if qid not in pred:
+            pred[qid] = {"label": label, "cand": [], "qid": qid}
+        assert pred[qid]["label"] == label
+        pred[qid]["cand"].append((logit, cid))
+    mrr = 0.0
+    for qid in pred:
+        pred[qid]["cand"].sort(key = lambda x:x[0], reverse=True)
+        print_rank_0(json.dumps(pred[qid]))
+        for ind, cand in enumerate(pred[qid]["cand"]):
+            if cand[1] == pred[qid]["label"] - 1:
+                mrr += 1.0 / (ind + 1)
 
     total_loss /= step
-    return total_loss, float(right.float() / total.float())
+    return total_loss, mrr / len(all_labels)
 
 
 
@@ -1137,7 +1167,7 @@ def main():
         },
         "quoter": {
             "dataset": QuoteRDataset,
-            "eval_func": evaluate_rank,
+            "eval_func": evaluate_quoter,
             "cache_path": None,
             "infer_func": infer_csl
         }

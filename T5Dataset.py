@@ -212,7 +212,7 @@ class QuoteRDataset(T5Dataset):
             line = json.loads(line)
             prefix = self.tokenizer.encode(line["prefix"])
             postfix = self.tokenizer.encode(line["postfix"])
-            if self.split == "train" or self.split == "dev":
+            if self.split == "train":# or self.split == "dev":
                 # positve sample
                 pos_inputx = prefix + [495] + all_candidates_token[line["answer"]] + [495] + postfix
                 target = [1, self.tokenizer.get_sentinel_id(0)] #+ self.tokenizer.encode("正确")
@@ -255,12 +255,15 @@ class QuoteRDataset(T5Dataset):
         max_enc_len = max(enc_sizes)
         max_dec_len = max(dec_sizes)
         random.shuffle(data)
+        print_rank_0("an data example")
+        print_rank_0(data[0])
+        print_rank_0("==" * 20)
         return data, max_enc_len, max_dec_len
 
     def collate(self, samples):
         bs = len(samples)
         neg_num = 1
-        if self.split == "train" or self.split == "dev":
+        if self.split == "train":# or self.split == "dev":
             model_data = {
                 "enc_input_ids": torch.ones(bs, neg_num + 1, self.max_enc_len, dtype=torch.long) * self.pad_id,
                 "enc_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_enc_len, self.max_enc_len),
@@ -286,7 +289,7 @@ class QuoteRDataset(T5Dataset):
                 "cidx": torch.zeros(bs, dtype=torch.long),
                 "label": torch.zeros(bs, dtype=torch.long),
             }
-        if self.split == "train" or self.split == "dev":
+        if self.split == "train":# or self.split == "dev":
             for i, samp in enumerate(samples):
                 pos_enc_len, dec_len = len(samp["pos_input_idx"]), len(samp["dec_input_ids"])
                 model_data["enc_input_ids"][i][0][:pos_enc_len] = torch.tensor(samp["pos_input_idx"], dtype=torch.long)
@@ -322,7 +325,7 @@ class QuoteRDataset(T5Dataset):
             model_data["enc_attention_mask"] = model_data["enc_attention_mask"].half()
             model_data["dec_attention_mask"] = model_data["dec_attention_mask"].half()
             model_data["cross_attention_mask"] = model_data["cross_attention_mask"].half()
-        if self.split == "train" or self.split == "dev":
+        if self.split == "train":# or self.split == "dev":
             model_data["enc_input_ids"] = model_data["enc_input_ids"].view(bs * (neg_num + 1), self.max_enc_len)
             model_data["enc_attention_mask"] = model_data["enc_attention_mask"].view(bs * (neg_num + 1), 1, self.max_enc_len, self.max_enc_len)
             model_data["dec_attention_mask"] = model_data["dec_attention_mask"].view(bs * (neg_num + 1), 1, self.max_dec_len, self.max_dec_len)
