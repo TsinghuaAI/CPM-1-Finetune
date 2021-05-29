@@ -259,7 +259,7 @@ class QuoteRDataset(T5Dataset):
 
     def collate(self, samples):
         bs = len(samples)
-        neg_num = 3
+        neg_num = 1
         if self.split == "train" or self.split == "dev":
             model_data = {
                 "enc_input_ids": torch.ones(bs, neg_num + 1, self.max_enc_len, dtype=torch.long) * self.pad_id,
@@ -335,10 +335,7 @@ class QuoteRDataset(T5Dataset):
 class SogouLogDataset(T5Dataset):
     def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
         super(SogouLogDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
-        if not do_infer:
-            self.data_num = int(0.3 * len(self.data))
-        else:
-            self.data_num = len(self.data)
+
 
     def keep(self, data): # 把一些确定是无效的数据删掉
         if "锟斤拷" in data["query"] or "�" in data["query"]:
@@ -377,10 +374,10 @@ class SogouLogDataset(T5Dataset):
         with open(self.path, "r") as f:
             lines = f.readlines()
         if self.do_infer:
-            datanum = len(lines)
+            self.datanum = len(lines)
         else:
-            datanum = int(0.2 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
-        for line in lines[:datanum]:
+            self.datanum = int(0.05 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
+        for line in lines[:self.datanum]:
             d = json.loads(line)
             d = self.pre_process(d)
             if self.do_infer:
@@ -409,7 +406,7 @@ class SogouLogDataset(T5Dataset):
                 if len(inputx_pos) > 150 or len(inputx_neg) > 150:
                     continue
                 data.append({
-                    "idx": d["id"] if self.do_infer else self.idx,
+                    "idx": self.idx,
                     "pos_input_idx": inputx_pos,
                     "neg_input_idx": inputx_neg,
                     "dec_input_ids": target,

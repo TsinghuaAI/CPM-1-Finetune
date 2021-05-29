@@ -31,7 +31,7 @@ DATA_EXT=".json"
 CACHE_PATH="/cache/"
 DATA_PATH="/mnt/sfs_turbo/data/Sogou-log"
 
-CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
+CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
 # CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/t5_sogou-log_lr0.000003_bs4-4const_drop"
 
@@ -42,7 +42,7 @@ LR=0.000005
 TRAIN_ITER=20000
 EPOCHS=10
 
-SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/t5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const_drop/"
+SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/afterDel/t5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
@@ -78,7 +78,7 @@ OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
 OPTS+=" --save-interval 400"
-OPTS+=" --eval-interval 200"
+OPTS+=" --eval-interval 20"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
 OPTS+=" --checkpoint-activations"

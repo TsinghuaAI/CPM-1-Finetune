@@ -42,7 +42,7 @@ TRAIN_ITER=20000
 EPOCHS=10
 TEMP=10
 
-SAVE_PATH="${WORKING_DIR}/results/t5_quoter/t5_quoter_wodrop_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}_temp${TEMP}const_drop/"
+SAVE_PATH="${WORKING_DIR}/results/t5_quoter/afterDel/t5_quoter_wodrop_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}_temp${TEMP}const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
