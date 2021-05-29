@@ -1,0 +1,12 @@
+{
+    "enc": {
+        "prompt_len": 20,
+        "init_tokens": "请阅读后续文章，回答相关问题。",
+        "default_init_token": "<mask>"
+    },
+    "dec": {
+        "prompt_len": 0,
+        "init_tokens": "",
+        "default_init_token": "<mask>"
+    }
+}

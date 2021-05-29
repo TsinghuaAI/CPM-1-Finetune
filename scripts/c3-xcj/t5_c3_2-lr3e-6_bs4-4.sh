@@ -33,15 +33,14 @@ DATA_PATH="/mnt/sfs_turbo/data/CLUE/c3"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
-# CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune/results/t5_finetune_c3_2_lr0.000005const_drop"
-
+# CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop"
 
 
 BATCH_SIZE=4
 GRAD_ACC=4
 LR=0.000003
 TRAIN_ITER=20000
-EPOCHS=10
+EPOCHS=40
 
 SAVE_PATH="${WORKING_DIR}/results/t5_c3_2_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const_drop/"
 LOG_FILE="${SAVE_PATH}/log.txt"
@@ -78,7 +77,7 @@ OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
-OPTS+=" --save-interval 550"
+OPTS+=" --save-interval 1000"
 OPTS+=" --eval-interval 50"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"

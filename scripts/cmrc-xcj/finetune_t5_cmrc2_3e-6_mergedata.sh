@@ -37,7 +37,7 @@ EPOCHS=10
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
-DATA_PATH="/mnt/sfs_turbo/data/CLUE/cmrc/cail/merge"
+DATA_PATH="/mnt/sfs_turbo/data/CLUE/cmrc/merge_DRCD"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
 CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"

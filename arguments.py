@@ -65,6 +65,7 @@ def add_model_config_args(parser: argparse.ArgumentParser):
                                    help='Run optimizer on CPU')
     group.add_argument('--cpu_torch_adam', action='store_true',
                                    help='Use Torch Adam as optimizer on CPU.')
+    group.add_argument("--mt5", action="store_true")
 
     return parser
 
@@ -134,6 +135,8 @@ def add_training_args(parser: argparse.ArgumentParser):
 
     group.add_argument('--seed', type=int, default=1234,
                        help='random seed')
+    group.add_argument("--temp", type=int, default=10)
+    group.add_argument("--target_token", type=int, default=400)
     # Batch prodecuer arguments
     group.add_argument('--reset-position-ids', action='store_true',
                        help='Reset posistion ids after end-of-document token.')

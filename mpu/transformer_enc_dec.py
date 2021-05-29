@@ -635,7 +635,8 @@ class ParallelTransformer(nn.Module):
     def init_prompt_embeds(self):
         if self.prompt_config is not None:
             prompt_weights = self.word_embeds(self.prompt_config["init_ids"]).detach()
-            self.prompt_embeds = nn.Embedding(self.prompt_config["prompt_len"], self.config.d_model).from_pretrained(prompt_weights, freeze=False)
+            # self.prompt_embeds = nn.Embedding(self.prompt_config["prompt_len"], self.config.d_model).from_pretrained(prompt_weights, freeze=False)
+            self.prompt_embeds.weight.data = prompt_weights
 
     def get_input_embeds(self, input_ids):
         p_embeds = None

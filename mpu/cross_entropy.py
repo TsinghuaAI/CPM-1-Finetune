@@ -52,6 +52,7 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
             partition_vocab_size, rank, world_size)
 
         # Create a mask of valid vocab ids (1 means it needs to be masked).
+        # target: batch, seq_len
         target_mask = (target < vocab_start_index) | (target >= vocab_end_index)
         masked_target = target.clone() - vocab_start_index
         masked_target[target_mask] = 0
@@ -59,13 +60,13 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
         # Get predicted-logits = logits[target].
         # For Simplicity, we convert logits to a 2-D tensor with size
         # [*, partition-vocab-size] and target to a 1-D tensor of size [*].
-        logits_2d = logits.view(-1, partition_vocab_size)
-        masked_target_1d = masked_target.view(-1)
+        logits_2d = logits.view(-1, partition_vocab_size) # batch * seq_len, partition_vocab_size
+        masked_target_1d = masked_target.view(-1) # batch * seq_len
         arange_1d = torch.arange(start=0, end=logits_2d.size()[0],
                                  device=logits_2d.device)
-        predicted_logits_1d = logits_2d[arange_1d, masked_target_1d]
-        predicted_logits = predicted_logits_1d.view_as(target)
-        predicted_logits[target_mask] = 0.0
+        predicted_logits_1d = logits_2d[arange_1d, masked_target_1d] # batch * seq_len
+        predicted_logits = predicted_logits_1d.view_as(target) # batch, seq_len
+        predicted_logits[target_mask] = 0.0 # batch, seq_len
         # All reduce is needed to get the chunks from other GPUs.
         torch.distributed.all_reduce(predicted_logits,
                                      op=torch.distributed.ReduceOp.SUM,

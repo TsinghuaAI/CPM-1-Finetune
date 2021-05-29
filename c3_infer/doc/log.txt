@@ -1,0 +1,3 @@
+Total train epochs 10 | Total train iters 10 | 
+Path: /mnt/sfs_turbo/data/CLUE/c3/doc/test.json | Ratio:1 | Max enc len: 512 | Max dec len: 2 | Data num: 2016
+Inferenced 2002 samples

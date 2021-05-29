@@ -32,13 +32,14 @@ CACHE_PATH="/cache/"
 DATA_PATH="/mnt/sfs_turbo/data/CLUE/cmrc"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
-# CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
-CKPT_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr0.000005const_dropout_fix2/"
+CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
+# CKPT_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr0.000005const_dropout_fix2/"
 
 SAVE_PATH="${WORKING_DIR}/results/t5_finetune_cmrc_lr0.000005const_dropout_fix2/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
 TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
+
 
 BATCH_SIZE=4
 GRAD_ACC=8
@@ -85,10 +86,12 @@ OPTS+=" --deepspeed-activation-checkpointing"
 OPTS+=" --fp16"
 OPTS+=" --deepspeed"
 OPTS+=" --deepspeed_config ${DS_CONFIG}"
-# OPTS+=" --do_train"
-# OPTS+=" --do_valid"
+OPTS+=" --do_train"
+OPTS+=" --do_valid"
 # OPTS+=" --do_eval"
 OPTS+=" --do_infer"
+OPTS+=" --prompt_tune"
+OPTS+=" --prompt_config ${PROMPT_CONFIG}"
 OPTS+=" --epochs ${EPOCHS}"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"

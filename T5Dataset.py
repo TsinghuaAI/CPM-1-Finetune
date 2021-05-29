@@ -8,11 +8,12 @@ import random
 from tqdm import tqdm
 from torch._C import dtype
 from torch.utils.data import Dataset
-from data_utils.tokenization_enc_dec import EncDecTokenizer
+from data_utils.tokenization_enc_dec import EncDecTokenizer,MT5EncDecTokenizer
 import pickle
 import mpu
 import math
 from utils import print_rank_0, save_rank_0
+
 
 class T5Dataset(Dataset):
     def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
@@ -41,8 +42,8 @@ class T5Dataset(Dataset):
         else:
             self.data, self.max_enc_len, self.max_dec_len = self.process_data()
 
-        # if prompt_config is not None:
-        #     self.data, self.max_enc_len, self.max_dec_len = self.add_prompt_ids(self.data, self.max_enc_len, self.max_dec_len)
+        if prompt_config is not None:
+            self.data, self.max_enc_len, self.max_dec_len = self.add_prompt_ids(self.data, self.max_enc_len, self.max_dec_len)
 
         if do_infer:
             total_eval_batch_size = mpu.get_data_parallel_world_size() * args.batch_size
@@ -60,15 +61,17 @@ class T5Dataset(Dataset):
         raise NotImplementedError
 
     def add_prompt_ids(self, data, max_enc_len, max_dec_len):
-        enc_prompt_ids = [i for i in range(self.prompt_config["enc"]["prompt_len"])]
-        dec_prompt_ids = [i for i in range(self.prompt_config["dec"]["prompt_len"])]
+        enc_prompt_ids = [- (i + 1) for i in range(self.prompt_config["enc"]["prompt_len"])]
+        dec_prompt_ids = [- (i + 1) for i in range(self.prompt_config["dec"]["prompt_len"])]
         pad_ids = [self.tokenizer.pad_id for _ in range(self.prompt_config["dec"]["prompt_len"])]
 
         for d in data:
             d["enc_input_ids"] = enc_prompt_ids + d["enc_input_ids"]
             d["dec_input_ids"] = dec_prompt_ids + d["dec_input_ids"]
             d["label_ids"] = pad_ids + d["label_ids"]
-
+        # print(enc_prompt_ids)
+        # print(dec_prompt_ids)
+        # print("=" * 20)
         max_enc_len += self.prompt_config["enc"]["prompt_len"]
         max_dec_len += self.prompt_config["dec"]["prompt_len"]
 
@@ -183,6 +186,316 @@ class TNewsDataset(T5Dataset):
         max_dec_len = max(dec_sizes)
 
         return data, max_enc_len, max_dec_len
+
+
+class QuoteRDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(QuoteRDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+
+    def process_data(self):
+        data, self.neg_data = [], []
+        enc_sizes = []
+        dec_sizes = []
+        with open(self.path, "r") as f:
+            data_lines = f.readlines()
+
+        with open(os.path.join(self.args.data_path, "baihua_acl_0111.csv"), "r") as f:
+            cand_lines = f.readlines()
+            all_candidates = [line.strip().split(",")[0] for line in cand_lines]
+        all_candidates[0] = all_candidates[0][1:] # remove \ufeff
+        all_candidates_token = {cand: self.tokenizer.encode(cand) for cand in all_candidates}
+        print("all_cand_num: ", len(all_candidates_token))
+        self.all_truth = {}
+
+        did = 0
+        for line in data_lines[:int(self.ratio * len(data_lines))]:
+            line = json.loads(line)
+            prefix = self.tokenizer.encode(line["prefix"])
+            postfix = self.tokenizer.encode(line["postfix"])
+            if self.split == "train" or self.split == "dev":
+                # positve sample
+                pos_inputx = prefix + [495] + all_candidates_token[line["answer"]] + [495] + postfix
+                target = [1, self.tokenizer.get_sentinel_id(0)] #+ self.tokenizer.encode("正确")
+                # if self.add_target_post:
+                #     target += [self.tokenizer.get_sentinel_id(1)]
+                enc_sizes.append(len(pos_inputx))
+                dec_sizes.append(len(target))
+                negs = []
+                for cand in line["candidates"]:
+                    if cand != line["answer"]:
+                        neg_inputx = prefix + [495] + all_candidates_token[cand] + [495] + postfix
+                        negs.append(neg_inputx)
+                        
+                        enc_sizes.append(len(neg_inputx))
+                data.append({
+                    "idx": self.idx,
+                    "pos_input_idx": pos_inputx,
+                    "neg_input_idx": negs,
+                    "dec_input_ids": target,
+                })
+                self.idx += 1
+            else:
+                label = line["label"]
+                if label > len(line["candidates"]):
+                    continue
+                assert line["candidates"][label - 1] == line["answer"]
+                for cid, cand in enumerate(line["candidates"]):
+                    cand_inputx = prefix + [495] + all_candidates_token[cand] + [495] + postfix
+                    target = [1, self.tokenizer.get_sentinel_id(0)]
+                    data.append({
+                        "qidx": did,
+                        "cidx": cid,
+                        "enc_input_ids": cand_inputx,
+                        "dec_input_ids": target,
+                        "label": label,
+                    })
+                    enc_sizes.append(len(cand_inputx))
+                    dec_sizes.append(len(target))
+                did += 1
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+        random.shuffle(data)
+        return data, max_enc_len, max_dec_len
+
+    def collate(self, samples):
+        bs = len(samples)
+        neg_num = 3
+        if self.split == "train" or self.split == "dev":
+            model_data = {
+                "enc_input_ids": torch.ones(bs, neg_num + 1, self.max_enc_len, dtype=torch.long) * self.pad_id,
+                "enc_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_enc_len, self.max_enc_len),
+                "dec_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_dec_len, self.max_dec_len),
+                "cross_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_dec_len, self.max_enc_len),
+                "dec_input_ids": torch.ones(bs, neg_num + 1, self.max_dec_len, dtype=torch.long) * self.pad_id,
+            }
+            no_model_data = {
+                "idx": torch.zeros(bs, dtype=torch.long),
+                # "labels": torch.zeros(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
+                "loss_mask": torch.zeros(bs, self.max_dec_len),
+            }
+        else:
+            model_data = {
+                "enc_input_ids": torch.ones(bs, self.max_enc_len, dtype=torch.long) * self.pad_id,
+                "enc_attention_mask": torch.zeros(bs, 1, self.max_enc_len, self.max_enc_len),
+                "dec_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_dec_len),
+                "cross_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_enc_len),
+                "dec_input_ids": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
+            }
+            no_model_data = {
+                "qidx": torch.zeros(bs, dtype=torch.long),
+                "cidx": torch.zeros(bs, dtype=torch.long),
+                "label": torch.zeros(bs, dtype=torch.long),
+            }
+        if self.split == "train" or self.split == "dev":
+            for i, samp in enumerate(samples):
+                pos_enc_len, dec_len = len(samp["pos_input_idx"]), len(samp["dec_input_ids"])
+                model_data["enc_input_ids"][i][0][:pos_enc_len] = torch.tensor(samp["pos_input_idx"], dtype=torch.long)
+                model_data["dec_input_ids"][i][0][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+                model_data["enc_attention_mask"][i][0][0, :pos_enc_len, :pos_enc_len] = 1.0
+                model_data["dec_attention_mask"][i][0][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                model_data["cross_attention_mask"][i][0][0, :dec_len, :pos_enc_len] = 1.0
+
+                negs = random.sample(samp["neg_input_idx"], neg_num)
+                
+                for nid, neg in enumerate(negs):
+                    neg_enc_len = len(neg)
+                    model_data["enc_input_ids"][i][nid + 1][:neg_enc_len] = torch.tensor(neg, dtype=torch.long)
+                    model_data["dec_input_ids"][i][nid + 1][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+                    model_data["enc_attention_mask"][i][nid + 1][0, :neg_enc_len, :neg_enc_len] = 1.0
+                    model_data["dec_attention_mask"][i][nid + 1][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                    model_data["cross_attention_mask"][i][nid + 1][0, :dec_len, :neg_enc_len] = 1.0
+                no_model_data["idx"][i] = samp["idx"]
+        else:
+            for i, samp in enumerate(samples):
+                enc_len, dec_len = len(samp["enc_input_ids"]), len(samp["dec_input_ids"])
+                model_data["enc_input_ids"][i][:enc_len] = torch.tensor(samp["enc_input_ids"], dtype=torch.long)
+                model_data["dec_input_ids"][i][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+
+                model_data["enc_attention_mask"][i][0, :enc_len, :enc_len] = 1.0
+                model_data["dec_attention_mask"][i][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                model_data["cross_attention_mask"][i][0, :dec_len, :enc_len] = 1.0
+                no_model_data["qidx"][i] = samp["qidx"]
+                no_model_data["cidx"][i] = samp["cidx"]
+                no_model_data["label"][i] = samp["label"]
+
+        if self.args.fp16:
+            model_data["enc_attention_mask"] = model_data["enc_attention_mask"].half()
+            model_data["dec_attention_mask"] = model_data["dec_attention_mask"].half()
+            model_data["cross_attention_mask"] = model_data["cross_attention_mask"].half()
+        if self.split == "train" or self.split == "dev":
+            model_data["enc_input_ids"] = model_data["enc_input_ids"].view(bs * (neg_num + 1), self.max_enc_len)
+            model_data["enc_attention_mask"] = model_data["enc_attention_mask"].view(bs * (neg_num + 1), 1, self.max_enc_len, self.max_enc_len)
+            model_data["dec_attention_mask"] = model_data["dec_attention_mask"].view(bs * (neg_num + 1), 1, self.max_dec_len, self.max_dec_len)
+            model_data["cross_attention_mask"] = model_data["cross_attention_mask"].view(bs * (neg_num + 1), 1, self.max_dec_len, self.max_enc_len)
+            model_data["dec_input_ids"] = model_data["dec_input_ids"].view(bs * (neg_num + 1), self.max_dec_len)
+
+        return model_data, no_model_data
+
+
+class SogouLogDataset(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(SogouLogDataset, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+        if not do_infer:
+            self.data_num = int(0.3 * len(self.data))
+        else:
+            self.data_num = len(self.data)
+
+    def keep(self, data): # 把一些确定是无效的数据删掉
+        if "锟斤拷" in data["query"] or "�" in data["query"]:
+            return False
+        # if len(data["query"]) <= 1:
+        #     return False
+        # if data["query"] in data["pos_doc"] and data["query"] in data["neg_doc"]:
+        #     return False
+        # if data["query"] in data["neg_doc"] and data["query"] not in data["pos_doc"]:
+        #     return False
+        if data["pos_doc"] == data["neg_doc"]:
+            return False
+        return True
+    
+    def __len__(self):
+        return self.data_num
+
+    def __getitem__(self, idx):
+        if not self.do_infer:
+            return random.choice(self.data)
+        else:
+            return self.data[idx]
+    
+    def pre_process(self, data):
+        ret = {}
+        for key in data:
+            if isinstance(data[key], str):
+                ret[key] = data[key].replace("\u3000", " ")
+        return ret
+
+    def process_data(self):
+        data = []
+        enc_sizes = []
+        dec_sizes = []
+
+        with open(self.path, "r") as f:
+            lines = f.readlines()
+        if self.do_infer:
+            datanum = len(lines)
+        else:
+            datanum = int(0.2 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
+        for line in lines[:datanum]:
+            d = json.loads(line)
+            d = self.pre_process(d)
+            if self.do_infer:
+                qid = d["query_id"]
+                for cand in d["doc"]:
+                    cid = int(cand["sogou_id"].split('-')[-1])
+                    inputx = self.prefix_ids + self.tokenizer.encode("查询：") + (self.tokenizer.encode(d["query"])) + self.tokenizer.encode("标题：") + self.tokenizer.encode(cand["title"])
+                    target = [1, self.tokenizer.get_sentinel_id(0)]
+                    data.append({
+                        "qidx": qid,
+                        "cidx": cid,
+                        "enc_input_ids": inputx,
+                        "dec_input_ids": target
+                    })
+                    enc_sizes.append(len(inputx))
+                    dec_sizes.append(len(target))
+            else:
+                if not self.keep(d):
+                    continue
+                inputx_pos = self.prefix_ids + self.tokenizer.encode("查询：") + self.tokenizer.encode(d["query"]) + self.tokenizer.encode("标题：") + self.tokenizer.encode(d["pos_doc"])
+                inputx_neg = self.prefix_ids + self.tokenizer.encode("查询：") + self.tokenizer.encode(d["query"]) + self.tokenizer.encode("标题：") + self.tokenizer.encode(d["neg_doc"])
+
+                # context = self.prefix_ids + (self.tokenizer.encode(d["keywords"].replace(",", "，")) + [12] + self.tokenizer.encode(d["sentence"]))[:self.enc_seq_length]
+                target = [1, self.tokenizer.get_sentinel_id(0)] #+ (self.tokenizer.encode(self.label_word_map[d["label"]]) if not self.do_infer else [self.tokenizer.pad_id])
+
+                if len(inputx_pos) > 150 or len(inputx_neg) > 150:
+                    continue
+                data.append({
+                    "idx": d["id"] if self.do_infer else self.idx,
+                    "pos_input_idx": inputx_pos,
+                    "neg_input_idx": inputx_neg,
+                    "dec_input_ids": target,
+                })
+                enc_sizes.append(len(inputx_pos))
+                enc_sizes.append(len(inputx_neg))
+                dec_sizes.append(len(target))
+                # dec_sizes.append(1)
+                self.idx += 1
+
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+    def collate(self, samples):
+        bs = len(samples)
+        if not self.do_infer:
+            model_data = {
+                "enc_input_ids": torch.ones(bs, 2, self.max_enc_len, dtype=torch.long) * self.pad_id,
+                "enc_attention_mask": torch.zeros(bs, 2, 1, self.max_enc_len, self.max_enc_len),
+                "dec_attention_mask": torch.zeros(bs, 2, 1, self.max_dec_len, self.max_dec_len),
+                "cross_attention_mask": torch.zeros(bs, 2, 1, self.max_dec_len, self.max_enc_len),
+                "dec_input_ids": torch.ones(bs, 2, self.max_dec_len, dtype=torch.long) * self.pad_id,
+            }
+            no_model_data = {
+                "idx": torch.zeros(bs, dtype=torch.long),
+                "labels": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
+                "loss_mask": torch.zeros(bs, self.max_dec_len),
+            }
+        else:
+            model_data = {
+                "enc_input_ids": torch.ones(bs, self.max_enc_len, dtype=torch.long) * self.pad_id,
+                "enc_attention_mask": torch.zeros(bs, 1, self.max_enc_len, self.max_enc_len),
+                "dec_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_dec_len),
+                "cross_attention_mask": torch.zeros(bs, 1, self.max_dec_len, self.max_enc_len),
+                "dec_input_ids": torch.ones(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
+            }
+            no_model_data = {
+                "qidx": torch.zeros(bs, dtype=torch.long),
+                "cidx": torch.zeros(bs, dtype=torch.long),
+            }
+        if not self.do_infer:
+            for i, samp in enumerate(samples):
+                pos_enc_len, neg_enc_len = len(samp["pos_input_idx"]), len(samp["neg_input_idx"])
+                dec_len = len(samp["dec_input_ids"])
+                model_data["enc_input_ids"][i][0][:pos_enc_len] = torch.tensor(samp["pos_input_idx"], dtype=torch.long)
+                model_data["enc_input_ids"][i][1][:neg_enc_len] = torch.tensor(samp["neg_input_idx"], dtype=torch.long)
+
+                model_data["dec_input_ids"][i][0][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+                model_data["dec_input_ids"][i][1][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+
+                model_data["enc_attention_mask"][i][0][0, :pos_enc_len, :pos_enc_len] = 1.0
+                model_data["enc_attention_mask"][i][1][0, :neg_enc_len, :neg_enc_len] = 1.0
+
+                model_data["dec_attention_mask"][i][0][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                model_data["dec_attention_mask"][i][1][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+
+                model_data["cross_attention_mask"][i][0][0, :dec_len, :pos_enc_len] = 1.0
+                model_data["cross_attention_mask"][i][1][0, :dec_len, :neg_enc_len] = 1.0
+                no_model_data["idx"][i] = samp["idx"]
+        else:
+            for i, samp in enumerate(samples):
+                enc_len, dec_len = len(samp["enc_input_ids"]), len(samp["dec_input_ids"])
+                model_data["enc_input_ids"][i][:enc_len] = torch.tensor(samp["enc_input_ids"], dtype=torch.long)
+                model_data["dec_input_ids"][i][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+
+                model_data["enc_attention_mask"][i][0, :enc_len, :enc_len] = 1.0
+                model_data["dec_attention_mask"][i][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                model_data["cross_attention_mask"][i][0, :dec_len, :enc_len] = 1.0
+                no_model_data["qidx"][i] = samp["qidx"]
+                no_model_data["cidx"][i] = samp["cidx"]
+                
+
+        if self.args.fp16:
+            model_data["enc_attention_mask"] = model_data["enc_attention_mask"].half()
+            model_data["dec_attention_mask"] = model_data["dec_attention_mask"].half()
+            model_data["cross_attention_mask"] = model_data["cross_attention_mask"].half()
+        if not self.do_infer:
+            model_data["enc_input_ids"] = model_data["enc_input_ids"].view(bs * 2, self.max_enc_len)
+            model_data["enc_attention_mask"] = model_data["enc_attention_mask"].view(bs * 2, 1, self.max_enc_len, self.max_enc_len)
+            model_data["dec_attention_mask"] = model_data["dec_attention_mask"].view(bs * 2, 1, self.max_dec_len, self.max_dec_len)
+            model_data["cross_attention_mask"] = model_data["cross_attention_mask"].view(bs * 2, 1, self.max_dec_len, self.max_enc_len)
+            model_data["dec_input_ids"] = model_data["dec_input_ids"].view(bs * 2, self.max_dec_len)
+
+        return model_data, no_model_data
 
 
 class OCNLIDataset(T5Dataset):
@@ -812,36 +1125,48 @@ class C3Dataset2(T5Dataset):
     def process_data(self):
         data = []
         enc_sizes, dec_sizes = [], []
+        print(type(self.tokenizer))
         
-        number_map = [
-            50, # 一
-            230,
-            156,
-            349,
-            443,
-            803,
-            950,
-            1031 # 八
-        ]
+        if isinstance(self.tokenizer, MT5EncDecTokenizer):
+            number_map = [ # MT5  # 对应了 一、二、三、四、五、六、七、八
+                1374, 3178, 2092, 6216, 5737, 10534, 15390, 7704
+            ]
+            # number_map = [ # MT5 extra_id_99, extra_id_98, ..., extra_id_93
+            #     250000, 250001, 250002, 250003, 250004, 250005, 250006, 250007
+            # ]
+        else:
+            number_map = [ # CPM  # 对应了 一、二、三、四、五、六、七、八
+                50, 230, 156, 349, 443, 803, 950, 1031
+            ]
+            # 对应了 一些unused的token
+            # number_map = [ # CPM s_180, ..., s_187
+            #     26230, 26231, 26232, 26233, 26234, 26235, 26236, 26237
+            # ]
+            
 
         with open(self.path, "r") as f:
             jobj = json.load(f)
 
         for d in jobj[:int(self.ratio * len(jobj))]:
-            context_ids = self.tokenizer.encode(d[0])
+            if type(d[0]) == list:
+                context_ids = self.tokenizer.encode(''.join(d[0]))
+            else:
+                context_ids = self.tokenizer.encode(d[0])
             for qa in d[1]:
                 question_ids = self.tokenizer.encode(qa["question"])
                 choice_ids = []
                 for i, choice in enumerate(qa["choice"]):
                     choice_ids.extend([number_map[i], 20] + self.tokenizer.encode(choice) + [18])
                 enc_input_ids = self.prefix_ids + self.tokenizer.encode("问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids + self.tokenizer.encode("文章：") + context_ids
+                # enc_input_ids = self.prefix_ids + self.tokenizer.encode("阅读文章：") + context_ids + self.tokenizer.encode("回答问题：") + question_ids + self.tokenizer.encode("选项：") + choice_ids
                 # NOTE: This can be dangerous
-                enc_input_ids = enc_input_ids[:self.enc_seq_length]
+                if self.split == "train":
+                    enc_input_ids = enc_input_ids[:self.enc_seq_length]
                 target = [1, self.tokenizer.get_sentinel_id(0)] + ([number_map[qa["choice"].index(qa["answer"])]] if not self.do_infer else [self.tokenizer.pad_id])
                 if self.add_target_post:
                     target += [self.tokenizer.get_sentinel_id(1)]
                 data.append({
-                    "idx": qa["id"] if self.do_infer else self.idx,
+                    "idx": qa["id"] if self.do_infer and "id" in qa else self.idx,
                     "enc_input_ids": enc_input_ids,
                     "dec_input_ids": target[:-1],
                     "label_ids": target[1:],
@@ -855,6 +1180,84 @@ class C3Dataset2(T5Dataset):
         max_dec_len = max(dec_sizes)
 
         return data, max_enc_len, max_dec_len
+
+class C3Dataset3(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):
+        super(C3Dataset3, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+    
+    def process_data(self):
+        data = []
+        enc_sizes, dec_sizes = [], []
+        print(type(self.tokenizer))
+        
+        if isinstance(self.tokenizer, MT5EncDecTokenizer):
+            self.number_map = [ # MT5  # 对应了 一、二、三、四、五、六、七、八
+                1374, 3178, 2092, 6216, 5737, 10534, 15390, 7704
+            ]
+        else:
+            self.number_map = [ # CPM  # 对应了 一、二、三、四、五、六、七、八
+                50, 230, 156, 349, 443, 803, 950, 1031
+            ]
+
+        with open(self.path, "r") as f:
+            jobj = json.load(f)
+
+        for d in jobj[:int(self.ratio * len(jobj))]:
+            if type(d[0]) == list:
+                context_ids = self.tokenizer.encode(''.join(d[0]))
+            else:
+                context_ids = self.tokenizer.encode(d[0])
+            for qa in d[1]:
+                question_ids = self.tokenizer.encode(qa["question"])
+                choice_ids = []
+                choice_len = 0
+                for i, choice in enumerate(qa["choice"]):
+                    choice_ids.append([20] + self.tokenizer.encode(choice) + [18])
+                    choice_len += len(choice_ids[-1]) + 1
+                label = qa["choice"].index(qa["answer"])
+                prefix = self.prefix_ids + self.tokenizer.encode("问题：")
+                choice_prefix = self.tokenizer.encode("选项：")
+                context_prefix = self.tokenizer.encode("文章：")
+                data.append({
+                    "idx": qa["id"] if self.do_infer and "id" in qa else self.idx,
+                    "prefix": prefix,
+                    "question_ids": question_ids,
+                    "choice_prefix": choice_prefix,
+                    "choice_ids": choice_ids,
+                    "context_prefix": context_prefix,
+                    "context_ids": context_ids,
+                    "label": label,
+                })
+                
+                enc_sizes.append(len(prefix) + len(question_ids) + len(choice_prefix) + len(choice_ids) + len(context_prefix) + len(context_ids))
+                dec_sizes.append(2)
+                self.idx += 1
+        max_enc_len = min(max(enc_sizes), self.enc_seq_length)
+        max_dec_len = max(dec_sizes)
+
+        return data, max_enc_len, max_dec_len
+
+    def collate(self, samples):
+        insamples = []
+        for samp in samples:
+            anslist = list(range(len(samp["choice_ids"])))
+            random.shuffle(anslist)
+            inpchoice_idx = []
+            for i in range(len(anslist)):
+                inpchoice_idx.extend([self.number_map[i]] + samp["choice_ids"][anslist[i]])
+            enc_input_ids = samp["prefix"] + samp["question_ids"] + samp["choice_prefix"] + inpchoice_idx + samp["context_prefix"] + samp["context_ids"]
+            enc_input_ids = enc_input_ids[:self.enc_seq_length]
+
+            target = [1, self.tokenizer.get_sentinel_id(0)] + ([self.number_map[anslist.index(samp["label"])]] if not self.do_infer else [self.tokenizer.pad_id])
+            if self.add_target_post:
+                target += [self.tokenizer.get_sentinel_id(1)]
+            insamples.append({
+                "idx": samp["idx"],
+                "enc_input_ids": enc_input_ids,
+                "dec_input_ids": target[:-1],
+                "label_ids": target[1:],
+            })
+        return super().collate(insamples)
 
 
 class WSCDataset(T5Dataset):

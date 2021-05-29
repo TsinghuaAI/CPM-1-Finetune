@@ -3,7 +3,7 @@ import os
 
 from numpy.lib.nanfunctions import _nansum_dispatcher
 
-from data_utils.tokenization_enc_dec import EncDecTokenizer
+from data_utils.tokenization_enc_dec import EncDecTokenizer,MT5EncDecTokenizer
 
 
 def infer_tnews(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix=""):
@@ -164,7 +164,6 @@ def infer_csl(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix=""):
 
     return num
 
-
 def infer_wsc2(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix=""):
     label_word_map = {
         0: "false",
@@ -202,26 +201,37 @@ def infer_cmrc(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix=""):
 
 
 def infer_c32(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix=""):
-    number_map = {
-        50: 0, # 一
-        230: 1,
-        156: 2,
-        349: 3,
-        443: 4,
-        803: 5,
-        950: 6,
-        1031: 7 # 八
-    }
+    if isinstance(tokenizer, MT5EncDecTokenizer):
+        number_map = { #MT5, 一、二、三、四、五、六、七、八
+            1374: 0, 3178: 1, 2092: 2, 6216: 3, 5737: 4, 10534: 5, 15390: 6, 7704: 7,
+        }
+        # number_map = { # MT5 extra_id_99, extra_id_98, ..., extra_id_93
+        #     250000: 0, 250001: 1, 250002: 2, 250003: 3, 250004: 4, 250005: 5, 250006: 6, 250007: 7
+        # }
+    else:
+        number_map = { # CPM, 一、二、三、四、五、六、七、八
+            50: 0, 230: 1, 156: 2, 349: 3, 443: 4, 803: 5, 950: 6, 1031: 7 # 八
+        }
+        # number_map = { # CPM, s_180, ..., s_187
+        #     26230: 0, 26231: 1, 26232: 2, 26233: 3, 26234: 4, 26235: 5, 26236: 6, 26237: 7
+        # }
 
     num = 0
     with open(os.path.join(args.save, "predicts{}.json".format(prefix)), "w") as f:
         for i, p in zip(all_idx, all_preds):
-            if i != -1:
+            if p not in number_map:
                 f.write(json.dumps({
-                    "id": i,
-                    "label": number_map[p],
-                }) + "\n")
+                        "id": i,
+                        "label": p,
+                    }) + "\n")
                 num += 1
+            else:
+                if i != -1:
+                    f.write(json.dumps({
+                        "id": i,
+                        "label": number_map[p],
+                    }) + "\n")
+                    num += 1
 
     return num
 
@@ -247,5 +257,16 @@ def infer_chid2(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix="")
             if i != -1:
                 res["#idiom{}#".format(i)] = number_map[p]
                 num += 1
+        json.dump(res, f, indent=4)
+    return num
+
+def infer_sogou_log(args, tokenizer: EncDecTokenizer, all_qidx, all_cidx, all_logits, prefix=""):
+    num = 0
+    with open(os.path.join(args.save, "predicts{}.json".format(prefix)), "w") as f:
+        res = {}
+        for qid, cid, logit in zip(all_qidx, all_cidx, all_logits):
+            if qid not in res:
+                res[qid] = []
+            res[qid].append({"cid": cid, "logits": logit})
         json.dump(res, f, indent=4)
     return num

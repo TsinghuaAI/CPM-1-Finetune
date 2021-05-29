@@ -1,0 +1,112 @@
+#! /bin/bash
+
+WORKING_DIR=/mnt/sfs_turbo/CPM-Finetune-xcj
+
+if [[ $DLS_TASK_NUMBER == 1 ]]; then
+    MASTER_ADDR=localhost
+    MASTER_PORT=6000
+    NNODES=1
+    NODE_RANK=0
+else
+    MASTER_HOST="$BATCH_CUSTOM0_HOSTS"
+    MASTER_ADDR="${MASTER_HOST%%:*}"
+    MASTER_PORT="${MASTER_HOST##*:}"
+    NNODES="$DLS_TASK_NUMBER"
+    NODE_RANK="$DLS_TASK_INDEX"
+fi
+
+GPUS_PER_NODE=8
+DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
+                  --nnodes $NNODES --node_rank $NODE_RANK \
+                  --master_addr $MASTER_ADDR \
+                  --master_port $MASTER_PORT"
+
+# OPTIONS_NCCL="NCCL_DEBUG=info"
+
+# Change for multinode config
+MP_SIZE=4
+
+ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
+DATA_EXT=".json"
+CACHE_PATH="/cache/"
+DATA_PATH="/mnt/sfs_turbo/data/CLUE/c3"
+
+CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
+# CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
+CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop"
+
+
+
+BATCH_SIZE=4
+GRAD_ACC=4
+LR=0.001
+WEIGHT_DECAY=1e-2
+TRAIN_ITER=20000
+EPOCHS=10
+
+SAVE_PATH="${WORKING_DIR}/results/finetune-c3-prompt/t5_c3_2_prompt_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const_drop/"
+LOG_FILE="${SAVE_PATH}/log.txt"
+DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
+TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
+
+PROMPT_CONFIG="${WORKING_DIR}/configs/prompt/c3.json"
+
+ENC_LEN=512
+DEC_LEN=256
+
+
+OPTS=""
+OPTS+=" --model-config ${CONFIG_PATH}"
+OPTS+=" --model-parallel-size ${MP_SIZE}"
+OPTS+=" --batch-size ${BATCH_SIZE}"
+OPTS+=" --gradient-accumulation-steps ${GRAD_ACC}"
+OPTS+=" --enc-seq-length ${ENC_LEN}"
+OPTS+=" --dec-seq-length ${DEC_LEN}"
+OPTS+=" --train-iters ${TRAIN_ITER}"
+OPTS+=" --save ${SAVE_PATH}"
+OPTS+=" --log-file ${LOG_FILE}"
+OPTS+=" --load ${CKPT_PATH}"
+OPTS+=" --data-path ${DATA_PATH}"
+OPTS+=" --data-ext ${DATA_EXT}"
+OPTS+=" --data-name c32"
+OPTS+=" --data-impl mmap"
+OPTS+=" --lazy-loader"
+OPTS+=" --tokenizer-type GPT2BPETokenizer"
+OPTS+=" --split 949,50,1"
+OPTS+=" --distributed-backend nccl"
+OPTS+=" --lr ${LR}"
+OPTS+=" --no-load-optim"
+OPTS+=" --lr-decay-style constant"
+OPTS+=" --weight-decay ${WEIGHT_DECAY}"
+OPTS+=" --clip-grad 1.0"
+OPTS+=" --warmup 0.0"
+OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
+OPTS+=" --save-interval 400"
+OPTS+=" --eval-interval 50"
+OPTS+=" --eval-iters 10"
+OPTS+=" --log-interval 10"
+OPTS+=" --checkpoint-activations"
+OPTS+=" --deepspeed-activation-checkpointing"
+OPTS+=" --fp16"
+OPTS+=" --deepspeed"
+OPTS+=" --deepspeed_config ${DS_CONFIG}"
+OPTS+=" --do_train"
+OPTS+=" --do_valid"
+# OPTS+=" --do_eval"
+# OPTS+=" --do_infer"
+OPTS+=" --prompt_tune"
+OPTS+=" --prompt_config ${PROMPT_CONFIG}"
+OPTS+=" --epochs ${EPOCHS}"
+
+CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
+
+# echo "Copying Data"
+# cp -r ${ORIGIN_DATA_PATH} ${CACHE_PATH}
+# ls ${DATA_PATH}
+# echo "Copy End"
+
+echo ${CMD}
+mkdir -p ${SAVE_PATH}
+${CMD} 2>&1 | tee ${SAVE_PATH}/train_log
+
+set +x

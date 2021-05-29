@@ -21,7 +21,7 @@ from io import open
 import jieba
 import collections
 import six
-
+import sentencepiece as spm
 
 try:
     from functools import lru_cache
@@ -166,3 +166,234 @@ class EncDecTokenizer(object):
 
     def convert_ids_to_tokens(self, ids):
         return [self.decoder[x] for x in ids]
+
+
+
+
+# def is_contain_chinese(check_str):
+#     for ch in check_str:
+#         if u'\u4e00' <= ch <= u'\u9fff':
+#             return True
+#     if "\u2582" == check_str:
+#         return True
+#     return False
+
+# class WordpieceTokenizer(object):
+
+#     def __init__(self, vocab, unk_token="<unk>", max_input_chars_per_word=200):
+#         self.vocab = vocab
+#         self.unk_token = unk_token
+#         self.max_input_chars_per_word = max_input_chars_per_word
+
+#     def tokenize(self, token):
+
+#         token = convert_to_unicode(token)
+
+#         chars = list(token)
+#         if len(chars) > self.max_input_chars_per_word:
+#             return [self.unk_token]
+
+#         start = 0
+#         sub_tokens = []
+#         while start < len(chars):
+#             end = len(chars)
+#             cur_substr = None
+#             while start < end:
+#                 substr = "".join(chars[start:end])
+#                 if is_contain_chinese(substr):
+#                     if substr in self.vocab:
+#                         cur_substr = substr
+#                         break
+#                 else:
+#                     if start > 0:
+#                         substr = "##" + substr
+#                     if substr in self.vocab:
+#                         cur_substr = substr
+#                         break
+#                 end -= 1
+#             if cur_substr is None:
+#                 sub_tokens.append(self.unk_token)
+#                 start += 1
+#                 continue
+#             sub_tokens.append(cur_substr)
+#             start = end
+
+#         return sub_tokens
+
+
+# class EncDecTokenizer(object):
+
+#     def __init__(self, vocab_file, max_len=None, max_sentinels=185):
+#         self.max_len = max_len if max_len is not None else int(1e12)
+#         self.encoder = load_vocab(vocab_file)
+#         self.decoder = {v:k for k,v in self.encoder.items()}
+#         self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.encoder)
+
+#         self.translator = str.maketrans(" \n", "\u2582\u2583")
+
+#         self.sentinel_list = [self.encoder['<s_{}>'.format(i)] for i in range(max_sentinels)]
+
+#         self.en_vocab = {}
+#         for k, v in self.encoder.items():
+#             if is_contain_chinese(k):
+#                 self.en_vocab[v] = False
+#             else:
+#                 self.en_vocab[v] = True
+#         self.en_vocab[11] = False
+
+#         self.space = self.decoder[11]
+
+#     @property
+#     def vocab_size(self):
+#         return len(self.encoder)
+
+#     def __len__(self):
+#         return len(self.encoder)
+
+#     @property
+#     def eod_id(self):
+#         return self.encoder[self.eod_token]
+
+#     @property
+#     def pad_id(self):
+#         return self.encoder[self.pad_token]
+
+#     @property
+#     def eod_token(self):
+#         return '<eod>'
+
+#     @property
+#     def pad_token(self):
+#         return '<pad>'
+
+#     def get_sentinel_num(self):
+#         return len(self.sentinel_list)
+
+#     def get_sentinel_id(self, idx):
+#         return self.sentinel_list[idx]
+
+#     def tokenize(self, text):
+#         """ Tokenize a string. """
+#         output_tokens = []
+#         for x in jieba.cut(text, cut_all=False):
+#             x = x.translate(self.translator)
+#             output_tokens.extend(self.wordpiece_tokenizer.tokenize(x))
+
+#         return output_tokens
+
+#     def encode(self, text):
+#         output_tokens = [self.encoder[x] for x in self.tokenize(text)]
+
+#         # filter space
+#         if len(output_tokens) == 0:
+#             return output_tokens
+
+#         new_output_tokens = [output_tokens[0]]
+#         for i, x in enumerate(output_tokens[1:-1]):
+#             if x == 11:
+#                 if self.en_vocab[output_tokens[i]] and self.en_vocab[output_tokens[i+2]]:
+#                     continue
+#             new_output_tokens.append(x)
+#         new_output_tokens.append(output_tokens[-1])
+
+#         return new_output_tokens
+
+#     def decode(self, tokens):
+
+#         tokens = [self.decoder[x] for x in tokens]
+
+#         if len(tokens) == 0:
+#             return ""
+
+#         new_tokens = [tokens[0]]
+#         for x in tokens[1:]:
+#             if "##" == x[:2]:
+#                 new_tokens[-1] += x[2:]
+#             else:
+#                 new_tokens.append(x)
+#         tokens = new_tokens
+
+#         new_tokens = []
+#         for i, x in enumerate(tokens[:-1]):
+#             if not is_contain_chinese(x) and not is_contain_chinese(tokens[i+1]):
+#                 new_tokens.append(x)
+#                 new_tokens.append('\u2582')
+#             else:
+#                 new_tokens.append(x)
+#         new_tokens.append(tokens[-1])
+
+#         text = ''.join(new_tokens)
+#         text = text.replace('\u2582', ' ').replace('\u2583', '\n')
+#         return text
+
+
+
+class MT5EncDecTokenizer(EncDecTokenizer):
+
+    def __init__(self, vocab_file, max_len=None, max_sentinels=190):
+        self.max_len = max_len if max_len is not None else int(1e12)
+        # self.encoder = load_vocab(vocab_file)
+        # self.decoder = {v:k for k,v in self.encoder.items()}
+        # self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.encoder)
+
+        # self.translator = str.maketrans(" \n", "\u2582\u2583")
+
+        # self.sentinel_list = [self.encoder['<s_{}>'.format(i)] for i in range(max_sentinels)]
+
+        self.sp_model = spm.SentencePieceProcessor()
+        self.sp_model.Load(vocab_file)
+
+    @property
+    def vocab_size(self):
+        return 250112
+
+    def __len__(self):
+        return 250112
+
+    @property
+    def eod_id(self):
+        return self.sp_model.piece_to_id(['</s>'])[0]
+
+    @property
+    def pad_id(self):
+        return self.sp_model.piece_to_id(['<pad>'])[0]
+
+    @property
+    def eod_token(self):
+        return '<eod>'
+
+    @property
+    def pad_token(self):
+        return '<pad>'
+
+    # def get_sentinel_num(self):
+    #     return len(self.sentinel_list)
+
+    def get_sentinel_id(self, idx):
+        return 250111 - idx
+
+    def tokenize(self, text):
+        """ Tokenize a string. """
+        # output_tokens = []
+        # for x in jieba.cut(text, cut_all=False):
+        #     x = x.translate(self.translator)
+        #     output_tokens.extend(self.wordpiece_tokenizer.tokenize(x))
+        # return output_tokens
+
+        return self.sp_model.EncodeAsPieces(text)
+
+    def encode(self, text):
+        res = self.sp_model.piece_to_id(self.tokenize(text))
+        return res
+
+    def decode(self, tokens):
+        token = self.sp_model.IdToPiece(tokens)
+        text = self.sp_model.decode_pieces(token)
+        return text
+
+    def convert_tokens_to_ids(self, tokens):
+        return [self.encoder.get(x, self.encoder["<unk>"]) for x in tokens]
+
+    def convert_ids_to_tokens(self, ids):
+        return [self.decoder[x] for x in ids]
+

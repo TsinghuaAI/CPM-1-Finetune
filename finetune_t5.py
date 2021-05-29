@@ -57,7 +57,7 @@ from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
 from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CHIDDataset3, CMNLIDataset, CMRCDataset, CSLDataset, CSLDataset2, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2, WSCDataset3
-
+from T5Dataset import QuoteRDataset, SogouLogDataset
 import torch.nn.functional as F
 
 import time
