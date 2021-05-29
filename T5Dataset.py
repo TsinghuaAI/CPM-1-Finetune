@@ -350,14 +350,12 @@ class SogouLogDataset(T5Dataset):
             return False
         return True
     
-    def __len__(self):
-        return self.data_num
 
-    def __getitem__(self, idx):
-        if not self.do_infer:
-            return random.choice(self.data)
-        else:
-            return self.data[idx]
+    # def __getitem__(self, idx):
+    #     if not self.do_infer:
+    #         return random.choice(self.data)
+    #     else:
+    #         return self.data[idx]
     
     def pre_process(self, data):
         ret = {}
@@ -376,7 +374,7 @@ class SogouLogDataset(T5Dataset):
         if self.do_infer:
             self.datanum = len(lines)
         else:
-            self.datanum = int(0.05 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
+            self.datanum = int(0.01 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
         for line in lines[:self.datanum]:
             d = json.loads(line)
             d = self.pre_process(d)

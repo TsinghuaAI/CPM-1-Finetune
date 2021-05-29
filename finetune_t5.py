@@ -243,15 +243,22 @@ def forward_step(args, model_batch, no_model_batch, model, device, keep_enc_hidd
     return forw_out
 
 
+totalnum = 0
+rightnum = 0
 class _RankCrossEntropy(torch.autograd.Function):
     @staticmethod
     def forward(ctx, score, loss_mask):
         losses = F.cross_entropy(score, torch.zeros(score.size()[0], dtype=torch.long).to(score.device)) * loss_mask
-
+        global totalnum, rightnum
+        totalnum += int(score.size()[0])
+        rightnum += int((torch.max(score, dim = 1)[1] == 0).sum())
+        print_rank_0("accuracy: %s\t%s\t%s" % (rightnum, totalnum, rightnum/totalnum))
         torch.distributed.all_reduce(losses, op=torch.distributed.ReduceOp.SUM, group=mpu.get_model_parallel_group())
         softmax = F.softmax(score, dim = 1)
         ctx.save_for_backward(softmax, loss_mask)
-    
+
+        return losses
+
     @staticmethod
     def backward(ctx, grad_output):
         softmax, loss_mask = ctx.saved_tensors
@@ -260,7 +267,7 @@ class _RankCrossEntropy(torch.autograd.Function):
         grad_input.mul_(loss_mask)
         grad_input.mul_(grad_output)
 
-        return grad_output, None
+        return grad_input, None
 
 def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False, do_infer=False, valid = False):
     for k in model_batch:
@@ -351,8 +358,10 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
     for e in range(args.epochs):
         model.train()
         for model_batch, no_model_batch in train_dataloader:
-
-            forw_out = forward_step(args, model_batch, no_model_batch, model, device)
+            if args.data_name in ["sogou-log", "quoter"]:
+                forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device)
+            else:
+                forw_out = forward_step(args, model_batch, no_model_batch, model, device)
             loss = forw_out["loss"]
             
             if torch.distributed.get_rank() == 0:
@@ -506,7 +515,7 @@ def evaluate_rank(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, e
     right = torch.tensor(0, dtype=torch.long).to(device)
     with torch.no_grad():
         for model_batch, no_model_batch in eval_data_loader:
-            forw_out = forward_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"))
+            forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"))
             loss = forw_out["loss"].item() if "loss" in forw_out else 0
             total_loss += loss
 
