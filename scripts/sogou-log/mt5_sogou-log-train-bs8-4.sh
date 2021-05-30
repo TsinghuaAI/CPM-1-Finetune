@@ -37,7 +37,7 @@ CKPT_PATH="/mnt/sfs_turbo/mt5_origin"
 
 BATCH_SIZE=8
 GRAD_ACC=4
-LR=0.00005
+LR=0.00003
 TRAIN_ITER=20000
 EPOCHS=10
 
@@ -91,6 +91,7 @@ OPTS+=" --do_valid"
 # OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
 OPTS+=" --mt5"
+OPTS+=" --temp 10"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
 

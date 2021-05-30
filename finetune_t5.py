@@ -303,8 +303,8 @@ def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc
         else:
             loss_mask = torch.tensor(1, dtype=torch.long).to(logits.device)
         if quoter_valid:
-            forw_out["score"] = relevant_logit
-            forw_out["loss"] = 0
+            forw_out["score"] = relevant_logit / args.temp
+            # forw_out["loss"] = 0
             return forw_out
         score = relevant_logit.view(-1, 2) / args.temp
 
@@ -563,18 +563,23 @@ def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset,
             gathered_logits = [torch.zeros_like(score) for _ in range(mpu.get_data_parallel_world_size())]
             torch.distributed.all_gather(gathered_logits, score.contiguous(), mpu.get_data_parallel_group())
             all_logits.extend(gathered_logits)
+            # all_logits.append(score)
             
             gathered_qidx = [torch.zeros_like(no_model_batch["qidx"]) for _ in range(mpu.get_data_parallel_world_size())]
             torch.distributed.all_gather(gathered_qidx, no_model_batch["qidx"].contiguous(), mpu.get_data_parallel_group())
             all_qidx.extend(gathered_qidx)
+            # all_qidx.append(no_model_batch["qidx"])
 
             gathered_cidx = [torch.zeros_like(no_model_batch["cidx"]) for _ in range(mpu.get_data_parallel_world_size())]
             torch.distributed.all_gather(gathered_cidx, no_model_batch["cidx"].contiguous(), mpu.get_data_parallel_group())
             all_cidx.extend(gathered_cidx)
+            # all_cidx.append(no_model_batch["cidx"])
+
 
             gathered_labels = [torch.zeros_like(no_model_batch["label"]) for _ in range(mpu.get_data_parallel_world_size())]
             torch.distributed.all_gather(gathered_labels, no_model_batch["label"].contiguous(), mpu.get_data_parallel_group())
             all_labels.extend(gathered_labels)
+            # all_labels.append(no_model_batch["label"])
 
             step += 1
     
@@ -598,9 +603,12 @@ def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset,
         for ind, cand in enumerate(pred[qid]["cand"]):
             if cand[1] == pred[qid]["label"] - 1:
                 mrr += 1.0 / (ind + 1)
-
+                break
+    mrr = mrr / len(all_labels)
+    # if rank == 0:
+    #     print("mrr:", mrr)
     total_loss /= step
-    return total_loss, mrr / len(all_labels)
+    return total_loss, mrr
 
 
 

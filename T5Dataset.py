@@ -208,7 +208,7 @@ class QuoteRDataset(T5Dataset):
         self.all_truth = {}
 
         did = 0
-        for line in data_lines[:int(self.ratio * len(data_lines))]:
+        for line in data_lines[:int(len(data_lines))]:
             line = json.loads(line)
             prefix = self.tokenizer.encode(line["prefix"])
             postfix = self.tokenizer.encode(line["postfix"])
@@ -230,7 +230,7 @@ class QuoteRDataset(T5Dataset):
                 data.append({
                     "idx": self.idx,
                     "pos_input_idx": pos_inputx,
-                    "neg_input_idx": negs,
+                    "neg_input_idx": negs, #[:5],
                     "dec_input_ids": target,
                 })
                 self.idx += 1
@@ -257,6 +257,12 @@ class QuoteRDataset(T5Dataset):
         random.shuffle(data)
         print_rank_0("an data example")
         print_rank_0(data[0])
+        if self.split == "train":
+            print_rank_0(self.tokenizer.decode(data[0]["pos_input_idx"]))
+            for neg in data[0]["neg_input_idx"]:
+                print_rank_0(self.tokenizer.decode(neg))
+        else:
+            print_rank_0(self.tokenizer.decode(data[0]["enc_input_ids"]))
         print_rank_0("==" * 20)
         return data, max_enc_len, max_dec_len
 
