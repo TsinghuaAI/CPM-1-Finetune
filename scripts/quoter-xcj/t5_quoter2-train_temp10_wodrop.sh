@@ -24,27 +24,29 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
 # OPTIONS_NCCL="NCCL_DEBUG=info"
 
 # Change for multinode config
-MP_SIZE=4
+MP_SIZE=8
 
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
-DATA_PATH="/mnt/sfs_turbo/data/Sogou-log"
+DATA_PATH="/mnt/sfs_turbo/data/qingyuan/quoter"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
-CKPT_PATH="/mnt/sfs_turbo/mt5_origin"
+# CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
+CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19-8MP/"
 
 
-BATCH_SIZE=8
-GRAD_ACC=4
+BATCH_SIZE=1
+GRAD_ACC=8
 LR=0.000005
 TRAIN_ITER=20000
 EPOCHS=10
+TEMP=10
 
-SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/afterDel/mt5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const/"
+SAVE_PATH="${WORKING_DIR}/results/t5_quoter/afterDel/t5_quoter2_wodrop_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}_temp${TEMP}const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
-TOKENIZER_PATH="${WORKING_DIR}/spiece.model"
+TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 ENC_LEN=512
 DEC_LEN=256
@@ -63,7 +65,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name sogou-log"
+OPTS+=" --data-name quoter2"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"
@@ -76,8 +78,8 @@ OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
-OPTS+=" --save-interval 400"
-OPTS+=" --eval-interval 200"
+OPTS+=" --save-interval 2000"
+OPTS+=" --eval-interval 100"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
 OPTS+=" --checkpoint-activations"
@@ -90,8 +92,8 @@ OPTS+=" --do_valid"
 # OPTS+=" --do_eval"
 # OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
-OPTS+=" --mt5"
-OPTS+=" --temp 10"
+OPTS+=" --temp ${TEMP}"
+OPTS+=" --target_token 400"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
 

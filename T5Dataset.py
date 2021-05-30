@@ -340,6 +340,143 @@ class QuoteRDataset(T5Dataset):
 
         return model_data, no_model_data
 
+class QuoteRDataset2(T5Dataset):
+    def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=True, cache_path=None, do_infer=False, prompt_config=None):
+        super(QuoteRDataset2, self).__init__(args, tokenizer, path, split, ratio, prefix, add_target_post, cache_path, do_infer, prompt_config)
+
+    def process_data(self):
+        data, self.neg_data = [], []
+        enc_sizes = []
+        dec_sizes = []
+        with open(self.path, "r") as f:
+            data_lines = f.readlines()
+
+        with open(os.path.join(self.args.data_path, "baihua_acl_0111.csv"), "r") as f:
+            cand_lines = f.readlines()
+            all_candidates = [line.strip().split(",")[0] for line in cand_lines]
+        all_candidates[0] = all_candidates[0][1:] # remove \ufeff
+        all_candidates_token = {cand: self.tokenizer.encode(cand) for cand in all_candidates}
+        print("all_cand_num: ", len(all_candidates_token))
+        self.all_truth = {}
+
+        for line in data_lines[:int(len(data_lines))]:
+            line = json.loads(line)
+            prefix = self.tokenizer.encode(line["prefix"])
+            postfix = self.tokenizer.encode(line["postfix"])
+
+            # positve sample
+            pos_inputx = prefix + [495] + all_candidates_token[line["answer"]] + [495] + postfix
+            target = [1, self.tokenizer.get_sentinel_id(0)] #+ self.tokenizer.encode("正确")
+            # if self.add_target_post:
+            #     target += [self.tokenizer.get_sentinel_id(1)]
+            enc_sizes.append(len(pos_inputx))
+            dec_sizes.append(len(target))
+            negs = []
+            for cand in line["candidates"]:
+                if cand != line["answer"]:
+                    neg_inputx = prefix + [495] + all_candidates_token[cand] + [495] + postfix
+                    negs.append(neg_inputx)
+                    enc_sizes.append(len(neg_inputx))
+            data.append({
+                "qidx": self.idx,
+                "pos_input_idx": pos_inputx,
+                "neg_input_idx": negs[:29], #[:5],
+                "dec_input_ids": target,
+            })
+            self.idx += 1
+        max_enc_len = max(enc_sizes)
+        max_dec_len = max(dec_sizes)
+        random.shuffle(data)
+        print_rank_0("an data example")
+        print_rank_0(data[0])
+
+        print_rank_0(self.tokenizer.decode(data[0]["pos_input_idx"]))
+        for neg in data[0]["neg_input_idx"]:
+            print_rank_0(self.tokenizer.decode(neg))
+        print_rank_0("==" * 20)
+        return data, max_enc_len, max_dec_len
+
+    def collate(self, samples):
+        bs = len(samples)
+        neg_num = 29
+        if self.split == "train":# or self.split == "dev":
+            model_data = {
+                "enc_input_ids": torch.ones(bs, neg_num + 1, self.max_enc_len, dtype=torch.long) * self.pad_id,
+                "enc_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_enc_len, self.max_enc_len),
+                "dec_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_dec_len, self.max_dec_len),
+                "cross_attention_mask": torch.zeros(bs, neg_num + 1, 1, self.max_dec_len, self.max_enc_len),
+                "dec_input_ids": torch.ones(bs, neg_num + 1, self.max_dec_len, dtype=torch.long) * self.pad_id,
+            }
+            no_model_data = {
+                "idx": torch.zeros(bs, dtype=torch.long),
+                # "labels": torch.zeros(bs, self.max_dec_len, dtype=torch.long) * self.pad_id,
+                "loss_mask": torch.zeros(bs, self.max_dec_len),
+            }
+        else:
+            assert len(samples) == 1
+            num = len(samples[0]["neg_input_idx"]) + 1
+            model_data = {
+                "enc_input_ids": torch.ones(num, self.max_enc_len, dtype=torch.long) * self.pad_id,
+                "enc_attention_mask": torch.zeros(num, 1, self.max_enc_len, self.max_enc_len),
+                "dec_attention_mask": torch.zeros(num, 1, self.max_dec_len, self.max_dec_len),
+                "cross_attention_mask": torch.zeros(num, 1, self.max_dec_len, self.max_enc_len),
+                "dec_input_ids": torch.ones(num, self.max_dec_len, dtype=torch.long) * self.pad_id,
+            }
+            no_model_data = {
+                "qidx": torch.zeros(samples[0]["qidx"], dtype=torch.long),
+                # "cidx": torch.zeros(num, dtype=torch.long),
+                # "label": torch.zeros(num, dtype=torch.long),
+            }
+        if self.split == "train":# or self.split == "dev":
+            for i, samp in enumerate(samples):
+                pos_enc_len, dec_len = len(samp["pos_input_idx"]), len(samp["dec_input_ids"])
+                model_data["enc_input_ids"][i][0][:pos_enc_len] = torch.tensor(samp["pos_input_idx"], dtype=torch.long)
+                model_data["dec_input_ids"][i][0][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+                model_data["enc_attention_mask"][i][0][0, :pos_enc_len, :pos_enc_len] = 1.0
+                model_data["dec_attention_mask"][i][0][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                model_data["cross_attention_mask"][i][0][0, :dec_len, :pos_enc_len] = 1.0
+
+                negs = random.sample(samp["neg_input_idx"], neg_num)
+                
+                for nid, neg in enumerate(negs):
+                    neg_enc_len = len(neg)
+                    model_data["enc_input_ids"][i][nid + 1][:neg_enc_len] = torch.tensor(neg, dtype=torch.long)
+                    model_data["dec_input_ids"][i][nid + 1][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+                    model_data["enc_attention_mask"][i][nid + 1][0, :neg_enc_len, :neg_enc_len] = 1.0
+                    model_data["dec_attention_mask"][i][nid + 1][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                    model_data["cross_attention_mask"][i][nid + 1][0, :dec_len, :neg_enc_len] = 1.0
+                no_model_data["idx"][i] = samp["qidx"]
+        else:
+            samp = samples[0]
+            pos_enc_len, dec_len = len(samp["pos_input_idx"]), len(samp["dec_input_ids"])
+            model_data["enc_input_ids"][0][:pos_enc_len] = torch.tensor(samp["pos_input_idx"], dtype=torch.long)
+            model_data["dec_input_ids"][0][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+            model_data["enc_attention_mask"][0][0, :pos_enc_len, :pos_enc_len] = 1.0
+            model_data["dec_attention_mask"][0][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+            model_data["cross_attention_mask"][0][0, :dec_len, :pos_enc_len] = 1.0
+            for i, neg in enumerate(samp["neg_input_idx"]):
+                neg_enc_len = len(neg)
+                model_data["enc_input_ids"][i + 1][:neg_enc_len] = torch.tensor(neg, dtype=torch.long)
+                model_data["dec_input_ids"][i + 1][:dec_len] = torch.tensor(samp["dec_input_ids"], dtype=torch.long)
+
+                model_data["enc_attention_mask"][i + 1][0, :neg_enc_len, :neg_enc_len] = 1.0
+                model_data["dec_attention_mask"][i + 1][0, :dec_len, :dec_len] = torch.tril(torch.ones(dec_len, dec_len))
+                model_data["cross_attention_mask"][i + 1][0, :dec_len, :neg_enc_len] = 1.0
+                # no_model_data["qidx"][i] = samp["qidx"]
+
+        if self.args.fp16:
+            model_data["enc_attention_mask"] = model_data["enc_attention_mask"].half()
+            model_data["dec_attention_mask"] = model_data["dec_attention_mask"].half()
+            model_data["cross_attention_mask"] = model_data["cross_attention_mask"].half()
+        if self.split == "train":# or self.split == "dev":
+            model_data["enc_input_ids"] = model_data["enc_input_ids"].view(bs * (neg_num + 1), self.max_enc_len)
+            model_data["enc_attention_mask"] = model_data["enc_attention_mask"].view(bs * (neg_num + 1), 1, self.max_enc_len, self.max_enc_len)
+            model_data["dec_attention_mask"] = model_data["dec_attention_mask"].view(bs * (neg_num + 1), 1, self.max_dec_len, self.max_dec_len)
+            model_data["cross_attention_mask"] = model_data["cross_attention_mask"].view(bs * (neg_num + 1), 1, self.max_dec_len, self.max_enc_len)
+            model_data["dec_input_ids"] = model_data["dec_input_ids"].view(bs * (neg_num + 1), self.max_dec_len)
+
+        return model_data, no_model_data
+
 
 class SogouLogDataset(T5Dataset):
     def __init__(self, args, tokenizer: EncDecTokenizer, path, split, ratio=1, prefix=None, add_target_post=False, cache_path=None, do_infer=False, prompt_config=None):

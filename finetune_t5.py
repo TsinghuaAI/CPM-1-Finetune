@@ -57,7 +57,7 @@ from data.enc_dec_dataset import build_train_valid_test_datasets
 from data.samplers import DistributedBatchSampler, RandomSampler
 
 from T5Dataset import AFQMCDataset, C3Dataset, C3Dataset2, CHIDDataset, CHIDDataset2, CHIDDataset3, CMNLIDataset, CMRCDataset, CSLDataset, CSLDataset2, CombinedDataset, IFLYTEKDataset, OCNLIDataset, T5Dataset, TNewsDataset, WSCDataset, WSCDataset2, WSCDataset3
-from T5Dataset import QuoteRDataset, SogouLogDataset
+from T5Dataset import QuoteRDataset, SogouLogDataset, QuoteRDataset2
 import torch.nn.functional as F
 
 import time
@@ -302,11 +302,11 @@ def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc
             loss_mask = torch.tensor(0, dtype=torch.long).to(logits.device)
         else:
             loss_mask = torch.tensor(1, dtype=torch.long).to(logits.device)
-        if quoter_valid:
-            forw_out["score"] = relevant_logit / args.temp
-            # forw_out["loss"] = 0
-            return forw_out
-        score = relevant_logit.view(-1, 2) / args.temp
+        # if quoter_valid:
+        #     forw_out["score"] = relevant_logit / args.temp
+        #     # forw_out["loss"] = 0
+        #     return forw_out
+        score = relevant_logit.view(-1, 30) / args.temp
 
         losses = _RankCrossEntropy.apply(score, loss_mask)
 
@@ -362,7 +362,7 @@ def train(args, data_config, tokenizer, model, optimizer, lr_scheduler,
     for e in range(args.epochs):
         model.train()
         for model_batch, no_model_batch in train_dataloader:
-            if args.data_name in ["sogou-log", "quoter"]:
+            if args.data_name in ["sogou-log", "quoter", "quoter2"]:
                 forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device)
             else:
                 forw_out = forward_step(args, model_batch, no_model_batch, model, device)
@@ -598,7 +598,7 @@ def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset,
         pred[qid]["cand"].append((logit, cid))
     mrr = 0.0
     for qid in pred:
-        pred[qid]["cand"].sort(key = lambda x:x[0], reverse=True)
+        pred[qid]["cand"].sort(key = lambda x:x[0], reverse = True)
         print_rank_0(json.dumps(pred[qid]))
         for ind, cand in enumerate(pred[qid]["cand"]):
             if cand[1] == pred[qid]["label"] - 1:
@@ -610,6 +610,41 @@ def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset,
     total_loss /= step
     return total_loss, mrr
 
+
+def evaluate_quoter2(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_data_loader, model, device, mode='dev'):
+    """Evaluation."""
+
+    # Turn on evaluation mode which disables dropout.
+    # model.eval()
+
+    total_loss = 0.0
+    step = 0
+    
+    mrr = torch.tensor(0.0, dtype=torch.float).to(device)
+    datanum = torch.tensor(0, dtype=torch.long).to(device)
+    with torch.no_grad():
+        for model_batch, no_model_batch in eval_data_loader:
+            forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"), quoter_valid=True)
+            loss = forw_out["loss"].item() if "loss" in forw_out else 0
+            total_loss += loss
+
+            score = forw_out["score"].squeeze(0) # candnum
+            assert len(score.size()) == 1
+            rank0 = (-score).argsort().argsort()
+            mrr += 1.0 / (rank0[0].float() + 1)
+            datanum += 1
+
+            step += 1
+    
+    rank = mpu.get_model_parallel_rank()
+    if rank != 0:
+        mrr *= 0
+        datanum *= 0
+    torch.distributed.all_reduce(mrr, op=torch.distributed.ReduceOp.SUM, group=mpu.get_data_parallel_group())
+    torch.distributed.all_reduce(datanum, op=torch.distributed.ReduceOp.SUM, group=mpu.get_data_parallel_group())
+
+    total_loss /= step
+    return total_loss, float(mrr/datanum)
 
 
 def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
@@ -988,7 +1023,10 @@ def load_data(args, data_config, data_type, tokenizer, prompt_config=None, ratio
     # Data parallel arguments.
     world_size = mpu.get_data_parallel_world_size()
     rank = mpu.get_data_parallel_rank()
-    global_batch_size = args.batch_size * world_size
+    if data_type == "dev" and args.data_name in ["quoter2"]:
+        global_batch_size = 1 * world_size
+    else:    
+        global_batch_size = args.batch_size * world_size
     num_workers = args.num_workers
 
     if data_type == 'train':
@@ -1176,6 +1214,12 @@ def main():
         "quoter": {
             "dataset": QuoteRDataset,
             "eval_func": evaluate_quoter,
+            "cache_path": None,
+            "infer_func": infer_csl
+        },
+        "quoter2": {
+            "dataset": QuoteRDataset2,
+            "eval_func": evaluate_quoter2,
             "cache_path": None,
             "infer_func": infer_csl
         }
