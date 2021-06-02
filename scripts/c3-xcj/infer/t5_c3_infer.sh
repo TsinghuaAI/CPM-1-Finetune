@@ -29,22 +29,22 @@ MP_SIZE=4
 ORIGIN_DATA_PATH="${WORKING_DIR}/large_data/"
 DATA_EXT=".json"
 CACHE_PATH="/cache/"
-DATA_PATH="/mnt/sfs_turbo/data/Sogou-log"
+DATA_PATH="/mnt/sfs_turbo/data/CLUE/c3"
 
-CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
-CKPT_PATH="/mnt/sfs_turbo/mt5_origin"
+CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config_drop.json"
 
+CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800"
 
-BATCH_SIZE=8
+BATCH_SIZE=4
 GRAD_ACC=4
-LR=0.000005
+LR=0.000003
 TRAIN_ITER=20000
 EPOCHS=10
 
-SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/afterDel/mt5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const/"
+SAVE_PATH="${WORKING_DIR}/c3_infer/all"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
-TOKENIZER_PATH="${WORKING_DIR}/spiece.model"
+TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 ENC_LEN=512
 DEC_LEN=256
@@ -63,7 +63,7 @@ OPTS+=" --log-file ${LOG_FILE}"
 OPTS+=" --load ${CKPT_PATH}"
 OPTS+=" --data-path ${DATA_PATH}"
 OPTS+=" --data-ext ${DATA_EXT}"
-OPTS+=" --data-name sogou-log"
+OPTS+=" --data-name c32"
 OPTS+=" --data-impl mmap"
 OPTS+=" --lazy-loader"
 OPTS+=" --tokenizer-type GPT2BPETokenizer"
@@ -76,8 +76,8 @@ OPTS+=" --weight-decay 1e-2"
 OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
-OPTS+=" --save-interval 400"
-OPTS+=" --eval-interval 200"
+OPTS+=" --save-interval 100"
+OPTS+=" --eval-interval 50"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
 OPTS+=" --checkpoint-activations"
@@ -85,13 +85,11 @@ OPTS+=" --deepspeed-activation-checkpointing"
 OPTS+=" --fp16"
 OPTS+=" --deepspeed"
 OPTS+=" --deepspeed_config ${DS_CONFIG}"
-OPTS+=" --do_train"
-OPTS+=" --do_valid"
-# OPTS+=" --do_eval"
+# OPTS+=" --do_train"
+# OPTS+=" --do_valid"
+OPTS+=" --do_eval"
 # OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
-OPTS+=" --mt5"
-OPTS+=" --temp 10"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
 

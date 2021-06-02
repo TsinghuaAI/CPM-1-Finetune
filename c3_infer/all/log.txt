@@ -1,0 +1,9 @@
+Total train epochs 10 | Total train iters 10 | 
+Path: /mnt/sfs_turbo/data/CLUE/c3/test.json | Ratio:1 | Max enc len: 818 | Max dec len: 2 | Data num: 3904
+Inferenced 3892 samples
+Total train epochs 10 | Total train iters 10 | 
+Path: /mnt/sfs_turbo/data/CLUE/c3/dev.json | Ratio:1 | Max enc len: 966 | Max dec len: 2 | Data num: 3816
+Eval result: loss: 0.47993 | acc: 0.8566
+Total train epochs 10 | Total train iters 10 | 
+Path: /mnt/sfs_turbo/data/CLUE/c3/test.json | Ratio:1 | Max enc len: 818 | Max dec len: 2 | Data num: 3892
+Eval result: loss: 0.535711 | acc: 0.8605

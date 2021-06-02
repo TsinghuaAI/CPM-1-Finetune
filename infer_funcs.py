@@ -2,7 +2,7 @@ import json
 import os
 
 from numpy.lib.nanfunctions import _nansum_dispatcher
-
+import torch
 from data_utils.tokenization_enc_dec import EncDecTokenizer,MT5EncDecTokenizer
 
 
@@ -262,11 +262,12 @@ def infer_chid2(args, tokenizer: EncDecTokenizer, all_idx, all_preds, prefix="")
 
 def infer_sogou_log(args, tokenizer: EncDecTokenizer, all_qidx, all_cidx, all_logits, prefix=""):
     num = 0
-    with open(os.path.join(args.save, "predicts{}.json".format(prefix)), "w") as f:
-        res = {}
-        for qid, cid, logit in zip(all_qidx, all_cidx, all_logits):
-            if qid not in res:
-                res[qid] = []
-            res[qid].append({"cid": cid, "logits": logit})
-        json.dump(res, f, indent=4)
+    if torch.distributed.get_rank() == 0:
+        with open(os.path.join(args.save, "predicts{}.json".format(prefix)), "w") as f:
+            res = {}
+            for qid, cid, logit in zip(all_qidx, all_cidx, all_logits):
+                if qid not in res:
+                    res[qid] = []
+                res[qid].append({"cid": cid, "logits": logit})
+            json.dump(res, f, indent=4)
     return num

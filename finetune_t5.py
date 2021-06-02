@@ -19,7 +19,7 @@
 USE_TORCH_DDP = False
 
 from datetime import datetime
-from infer_funcs import infer_afqmc, infer_c32, infer_chid2, infer_cmnli, infer_cmrc, infer_csl, infer_iflytek, infer_ocnli, infer_tnews, infer_wsc2
+from infer_funcs import infer_afqmc, infer_c32, infer_chid2, infer_cmnli, infer_cmrc, infer_csl, infer_iflytek, infer_ocnli, infer_tnews, infer_wsc2, infer_sogou_log
 import os
 import random
 import math
@@ -269,7 +269,7 @@ class _RankCrossEntropy(torch.autograd.Function):
 
         return grad_input, None
 
-def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False, do_infer=False, quoter_valid = False):
+def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc_hidden=False, do_infer=False, quoter_valid = False, sogou_log = False):
     for k in model_batch:
         model_batch[k] = model_batch[k].to(device)
     for k in no_model_batch:
@@ -292,28 +292,34 @@ def forward_rank_step(args, model_batch, no_model_batch, model, device, keep_enc
         forw_out["enc_hidden_states"] = enc_hidden_states
 
     assert logits.size()[1] == 2
-    if not do_infer:
-        rank = mpu.get_model_parallel_rank()
-        relevant_logit = logits[:,-1,400]
-        # if valid:
-        #     forw_out["score"] = relevant_logit
-        #     return forw_out
-        if rank != 0:
-            loss_mask = torch.tensor(0, dtype=torch.long).to(logits.device)
-        else:
-            loss_mask = torch.tensor(1, dtype=torch.long).to(logits.device)
-        # if quoter_valid:
-        #     forw_out["score"] = relevant_logit / args.temp
-        #     # forw_out["loss"] = 0
-        #     return forw_out
-        score = relevant_logit.view(-1, 30) / args.temp
 
-        losses = _RankCrossEntropy.apply(score, loss_mask)
+    rank = mpu.get_model_parallel_rank()
+    relevant_logit = logits[:,-1,400]
+    if do_infer:
+        forw_out["rlogits"] = relevant_logit
+        return forw_out
+    # if valid:
+    #     forw_out["score"] = relevant_logit
+    #     return forw_out
+    if rank != 0:
+        loss_mask = torch.tensor(0, dtype=torch.long).to(logits.device)
+    else:
+        loss_mask = torch.tensor(1, dtype=torch.long).to(logits.device)
+    # if quoter_valid:
+    #     forw_out["score"] = relevant_logit / args.temp
+    #     # forw_out["loss"] = 0
+    #     return forw_out
+    if sogou_log:
+        forw_out["score"] = relevant_logit
+        return forw_out
+    score = relevant_logit.view(-1, 2) / args.temp
 
-        loss = losses.mean()
+    losses = _RankCrossEntropy.apply(score, loss_mask)
 
-        forw_out["loss"] = loss
-        forw_out["score"] = score
+    loss = losses.mean()
+
+    forw_out["loss"] = loss
+    forw_out["score"] = score
     
     return forw_out
 
@@ -537,6 +543,63 @@ def evaluate_rank(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, e
 
     total_loss /= step
     return total_loss, float(right.float() / total.float())
+
+
+def infer_sogoulog(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_data_loader, model, device, mode='dev'):
+    # Turn on evaluation mode which disables dropout.
+    model.eval()
+
+    total_loss = 0.0
+    step = 0
+
+    all_logits = []
+    all_qidx = []
+    all_cidx = []
+
+    
+    with torch.no_grad():
+        for model_batch, no_model_batch in eval_data_loader:
+            forw_out = forward_rank_step(args, model_batch, no_model_batch, model, device, do_infer=(mode=="infer"), sogou_log = True)
+            loss = forw_out["loss"].item() if "loss" in forw_out else 0
+            total_loss += loss
+
+            # # print(forw_out["rlogits"])
+            # logits_list = [torch.zeros_like(forw_out["rlogits"]) for _ in range(mpu.get_data_parallel_world_size())]
+            # torch.distributed.all_gather(logits_list, forw_out["rlogits"].contiguous(), mpu.get_data_parallel_group())
+            # # gathered_logits = torch.cat(logits_list, dim=-1)
+            # all_logits.extend(logits_list)
+
+            # gathered_qidx = [torch.zeros_like(no_model_batch["qidx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            # torch.distributed.all_gather(gathered_qidx, no_model_batch["qidx"].contiguous(), mpu.get_data_parallel_group())
+            # all_qidx.extend(gathered_qidx)
+
+            # gathered_cidx = [torch.zeros_like(no_model_batch["cidx"]) for _ in range(mpu.get_data_parallel_world_size())]
+            # torch.distributed.all_gather(gathered_cidx, no_model_batch["cidx"].contiguous(), mpu.get_data_parallel_group())
+            # all_cidx.extend(gathered_cidx)
+
+            all_logits += forw_out["score"].tolist()
+            all_qidx += no_model_batch["qidx"].tolist()
+            all_cidx += no_model_batch["cidx"].tolist()
+
+            step += 1
+
+    total_loss /= step
+
+    rank = mpu.get_model_parallel_rank()
+    if rank == 0:
+        drank = mpu.get_data_parallel_rank()
+        fout = open(os.path.join(args.save, "predict_%s.json" % drank), "w")
+        for logit, qidx, cidx in zip(all_logits, all_qidx, all_cidx):
+            print(json.dumps({"logit": logit, "qidx": qidx, "cidx": cidx}), file = fout)
+        fout.close()
+
+    # all_logits = torch.cat(all_logits, dim=0).cpu().tolist()
+    # all_qidx = torch.cat(all_qidx, dim=0).cpu().tolist()
+    # all_cidx = torch.cat(all_cidx, dim=0).cpu().tolist()
+
+    # if mode == "infer":
+    #     return data_config[args.data_name]["infer_func"](args, tokenizer, all_qidx, all_cidx, all_logits)
+    return total_loss, 0
 
 
 def evaluate_quoter(args, tokenizer: EncDecTokenizer, data_config, eval_dataset, eval_data_loader, model, device, mode='dev'):
@@ -1209,7 +1272,13 @@ def main():
             "dataset": SogouLogDataset,
             "eval_func": evaluate_rank,
             "cache_path": None,
-            "infer_func": infer_csl
+            "infer_func": infer_sogou_log
+        },
+        "sogou-log-infer": {
+            "dataset": SogouLogDataset,
+            "eval_func": infer_sogoulog,
+            "cache_path": None,
+            "infer_func": infer_sogou_log
         },
         "quoter": {
             "dataset": QuoteRDataset,
@@ -1239,12 +1308,12 @@ def main():
 
     # Model, optimizer, and learning rate.
     model, optimizer, lr_scheduler = setup_model_and_optimizer(args, tokenizer.vocab_size, ds_config, prompt_config)
-        
+    
     if args.do_train:
         train(args, data_config, tokenizer, model, optimizer, lr_scheduler, train_dataset, train_dataloader, dev_dataset, dev_dataloader, device)
 
     if args.do_eval:
-        eval_dataloader, eval_dataset = load_data(args, data_config, 'dev', tokenizer, prompt_config, ratio=1)
+        eval_dataloader, eval_dataset = load_data(args, data_config, 'test', tokenizer, prompt_config, ratio=1)
         eval_func = data_config[args.data_name]["eval_func"]
 
         loss, acc = eval_func(args, tokenizer, data_config, eval_dataset, eval_dataloader, model, device, mode="test")

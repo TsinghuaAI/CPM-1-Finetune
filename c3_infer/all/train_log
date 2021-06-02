@@ -1,0 +1,328 @@
+[2021-05-31 02:43:16,139] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,163] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,203] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,204] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,204] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,205] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,206] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:16,206] [INFO] [distributed.py:39:init_distributed] Initializing torch distributed with backend: nccl
+[2021-05-31 02:43:20,653] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,653] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,654] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,654] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,654] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,654] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,655] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+[2021-05-31 02:43:20,656] [INFO] [checkpointing.py:629:_configure_using_config_file] {'partition_activations': False, 'contiguous_memory_optimization': False, 'cpu_checkpointing': False, 'number_checkpoints': None, 'synchronize_checkpoint_boundary': False, 'profile': False}
+Optimizer = FusedAdam
+Optimizer = FusedAdam
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:25,313] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>[2021-05-31 02:45:25,313] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+
+[2021-05-31 02:45:25,314] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:25,314] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+Optimizer = FusedAdam
+Optimizer = FusedAdam
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:26,106] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:26,107] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:26,108] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:26,108] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+[2021-05-31 02:45:27,596] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f9890293820>
+[2021-05-31 02:45:27,616] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7fabc492f760>
+[2021-05-31 02:45:27,621] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f98902938e0>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:2')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([ 2.2948e-05,  1.8668e-04,  6.3360e-05,  ..., -1.9300e-04,
+         1.9252e-04, -1.6296e-04], device='cuda:2', grad_fn=<SliceBackward>), tensor([-0.0002,  0.0007, -0.0009,  ..., -0.0009, -0.0008, -0.0004],
+       device='cuda:2', grad_fn=<SliceBackward>), tensor([-0.0013,  0.0002,  0.0025,  ..., -0.0001, -0.0001,  0.0007],
+       device='cuda:2', grad_fn=<SliceBackward>), tensor([ 2.0161e-03,  3.5048e-04, -2.1610e-03,  ...,  9.6560e-06,
+         5.4836e-06,  8.6606e-05], device='cuda:2', grad_fn=<SliceBackward>), tensor([ 0.0011,  0.0008, -0.0013,  ..., -0.0008,  0.0004,  0.0015],
+       device='cuda:2', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:2',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:27,633] [INFO] [engine.py:1286:_load_checkpoint] rank: 10 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_02_model_states.pt
+[2021-05-31 02:45:27,640] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7fabc492f820>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:6')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([-5.1260e-05,  2.9469e-04,  1.5116e-04,  ..., -1.8191e-04,
+         6.3002e-05, -8.8274e-05], device='cuda:6', grad_fn=<SliceBackward>), tensor([-5.8770e-05,  1.8873e-03, -1.0586e-03,  ...,  6.0678e-05,
+        -6.1083e-04,  5.2118e-04], device='cuda:6', grad_fn=<SliceBackward>), tensor([ 1.7881e-05, -3.7074e-04, -2.5392e-04,  ..., -2.1267e-03,
+         1.3428e-03, -3.7789e-04], device='cuda:6', grad_fn=<SliceBackward>), tensor([-2.9516e-04, -7.9453e-05, -1.2517e-04,  ...,  8.3113e-04,
+        -8.8978e-04, -6.5804e-04], device='cuda:6', grad_fn=<SliceBackward>), tensor([ 1.1033e-04,  2.4223e-04,  3.7074e-04,  ..., -4.8578e-05,
+         2.1923e-04,  2.0027e-04], device='cuda:6', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:6',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:27,655] [INFO] [engine.py:1286:_load_checkpoint] rank: 14 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_02_model_states.pt
+[2021-05-31 02:45:28,309] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f8f0cd156a0>
+[2021-05-31 02:45:28,334] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f8f0cd15760>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:3')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([-3.4213e-05, -8.3089e-05, -1.9193e-05,  ..., -1.3578e-04,
+         6.3896e-05, -3.6001e-05], device='cuda:3', grad_fn=<SliceBackward>), tensor([-3.1734e-04, -3.8803e-05, -9.1887e-04,  ..., -2.5558e-04,
+        -8.4066e-04, -8.4496e-04], device='cuda:3', grad_fn=<SliceBackward>), tensor([ 0.0002,  0.0007, -0.0016,  ..., -0.0016, -0.0019,  0.0003],
+       device='cuda:3', grad_fn=<SliceBackward>), tensor([-1.2434e-04,  6.4135e-04,  1.2274e-03,  ..., -1.9252e-05,
+         2.0301e-04,  3.8409e-04], device='cuda:3', grad_fn=<SliceBackward>), tensor([-0.0002,  0.0013, -0.0024,  ..., -0.0007, -0.0013, -0.0024],
+       device='cuda:3', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:3',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:28,383] [INFO] [engine.py:1286:_load_checkpoint] rank: 11 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_03_model_states.pt
+[2021-05-31 02:45:28,634] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f255d495520>
+[2021-05-31 02:45:28,658] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f255d4955e0>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:7')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([-4.4882e-05,  8.5473e-05, -3.4750e-05,  ..., -1.0794e-04,
+         8.3089e-05, -6.7949e-05], device='cuda:7', grad_fn=<SliceBackward>), tensor([ 0.0025, -0.0024,  0.0006,  ..., -0.0020,  0.0008,  0.0008],
+       device='cuda:7', grad_fn=<SliceBackward>), tensor([0.0002, 0.0002, 0.0002,  ..., 0.0004, 0.0012, 0.0003], device='cuda:7',
+       grad_fn=<SliceBackward>), tensor([-1.1432e-04,  3.6061e-05, -1.2040e-05,  ..., -5.7697e-04,
+         1.9193e-04, -1.1187e-03], device='cuda:7', grad_fn=<SliceBackward>), tensor([ 5.1308e-04, -8.8155e-05,  7.5912e-04,  ...,  8.1921e-04,
+        -1.9491e-04, -7.8630e-04], device='cuda:7', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:7',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:28,758] [INFO] [engine.py:1286:_load_checkpoint] rank: 15 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_03_model_states.pt
+Optimizer = FusedAdam
+Optimizer = FusedAdam
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:28,943] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:28,943] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:28,945] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:28,946] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+Optimizer = FusedAdam
+Optimizer = FusedAdam
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:29,065] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:29,065] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+Checking ZeRO support for optimizer=FusedAdam type=<class 'apex.optimizers.fused_adam.FusedAdam'>
+[2021-05-31 02:45:29,068] [INFO] [engine.py:640:_configure_zero_optimizer] Creating fp16 ZeRO stage 1 optimizer
+[2021-05-31 02:45:29,068] [INFO] [stage1.py:152:__init__] ZeRO Elastic Checkpoint = True
+[2021-05-31 02:45:30,447] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7fb51cb957f0>
+[2021-05-31 02:45:30,471] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7fb51cb958b0>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([-7.3195e-05, -1.1325e-05, -1.5950e-04,  ..., -6.9976e-05,
+         7.9930e-05, -8.8811e-06], device='cuda:4', grad_fn=<SliceBackward>), tensor([ 0.0014, -0.0023, -0.0023,  ..., -0.0009, -0.0011, -0.0002],
+       device='cuda:4', grad_fn=<SliceBackward>), tensor([-1.4324e-03,  1.4296e-03,  5.4121e-04,  ...,  9.4748e-04,
+        -2.0504e-05,  1.0653e-03], device='cuda:4', grad_fn=<SliceBackward>), tensor([-1.0949e-04, -8.5533e-05,  9.0897e-05,  ..., -2.1803e-04,
+         1.5001e-03, -1.2541e-03], device='cuda:4', grad_fn=<SliceBackward>), tensor([-8.9788e-04, -1.1981e-05,  1.6050e-03,  ..., -5.8413e-05,
+         6.4611e-04, -1.8537e-04], device='cuda:4', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:4',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:30,652] [INFO] [engine.py:1286:_load_checkpoint] rank: 12 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_00_model_states.pt
+[2021-05-31 02:45:30,857] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f3ccc62e790>
+[2021-05-31 02:45:30,860] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f2cc06d4760>
+[2021-05-31 02:45:30,862] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f20983928e0>
+[2021-05-31 02:45:30,880] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f3ccc62e850>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([-1.1158e-04,  3.1412e-05, -2.5964e-04,  ..., -1.4007e-05,
+         4.2915e-05, -1.1790e-04], device='cuda:0', grad_fn=<SliceBackward>), tensor([-9.4986e-04,  5.7554e-04,  8.6451e-04,  ...,  5.5933e-04,
+         1.8597e-05, -5.5170e-04], device='cuda:0', grad_fn=<SliceBackward>), tensor([-0.0010, -0.0005,  0.0007,  ..., -0.0002, -0.0011,  0.0016],
+       device='cuda:0', grad_fn=<SliceBackward>), tensor([ 6.2132e-04,  6.7616e-04,  8.3685e-04,  ...,  2.6011e-04,
+         6.9797e-05, -2.0981e-04], device='cuda:0', grad_fn=<SliceBackward>), tensor([ 0.0004, -0.0010, -0.0014,  ..., -0.0014,  0.0009,  0.0015],
+       device='cuda:0', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:0',
+       grad_fn=<SliceBackward>)]]}
+[2021-05-31 02:45:30,882] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f2cc06d4820>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([ 5.2750e-05,  7.7844e-05, -1.5044e-04,  ..., -1.4532e-04,
+         2.4974e-05, -1.1677e-04], device='cuda:1', grad_fn=<SliceBackward>), tensor([ 0.0015, -0.0002,  0.0003,  ..., -0.0005,  0.0005,  0.0007],
+       device='cuda:1', grad_fn=<SliceBackward>), tensor([ 0.0004, -0.0014,  0.0009,  ..., -0.0012,  0.0008,  0.0005],
+       device='cuda:1', grad_fn=<SliceBackward>), tensor([ 0.0006, -0.0005,  0.0016,  ..., -0.0002, -0.0002, -0.0001],
+       device='cuda:1', grad_fn=<SliceBackward>), tensor([-9.6560e-04, -3.2163e-04,  2.4378e-05,  ..., -1.1215e-03,
+         8.5783e-04, -2.7609e-04], device='cuda:1', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:1',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:30,886] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f20983929a0>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:5')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([ 7.7963e-05, -2.5010e-04, -8.8215e-06,  ...,  6.4373e-06,
+        -1.3411e-04, -2.0325e-04], device='cuda:5', grad_fn=<SliceBackward>), tensor([-0.0010,  0.0006,  0.0009,  ..., -0.0002, -0.0004, -0.0001],
+       device='cuda:5', grad_fn=<SliceBackward>), tensor([-5.8460e-04, -1.1873e-03, -7.7486e-07,  ..., -1.7519e-03,
+         5.1260e-04, -1.1444e-03], device='cuda:5', grad_fn=<SliceBackward>), tensor([ 7.1466e-05,  7.9811e-05, -2.7442e-04,  ...,  3.2592e-04,
+         4.7803e-04, -6.0081e-04], device='cuda:5', grad_fn=<SliceBackward>), tensor([-0.0009,  0.0004, -0.0014,  ...,  0.0025, -0.0022,  0.0007],
+       device='cuda:5', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:5',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/result[2021-05-31 02:46:06,431] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_02optim_states.pt'] does not exist
+[2021-05-31 02:46:06,431] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_02optim_states.pt'] does not exist
+[2021-05-31 02:46:08,220] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_03optim_states.pt'] does not exist
+[2021-05-31 02:46:08,220] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_03optim_states.pt'] does not exist
+[2021-05-31 02:46:10,539] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_00optim_states.pt'] does not exist
+[2021-05-31 02:46:10,703] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_01optim_states.pt'] does not exist
+[2021-05-31 02:46:10,719] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_01optim_states.pt'] does not exist
+[2021-05-31 02:46:10,902] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_00optim_states.pt'] does not exist
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+Building prefix dict from the default dictionary ...
+Building pr<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'><class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'><class 'data_utils.tokenization_enc_dec.EncDecTokenizer'><class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+
+
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Loading model cost 0.672 seconds.
+Prefix dict has been built successfully.
+Dumping model to file cache /tmp/jieba.cache
+Loading model cost 0.674 seconds.
+Prefix dict has been built successfully.
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Loading model cost 0.641 seconds.
+Prefix dict has been bu*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+ssfully.
+Loading model cost 0.684 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.702 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.705 seconds.
+Prefix dict has been built successfully.
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+ease further tune the variable for optimal performance in your application as needed. 
+*****************************************
+nabled .................. False
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   pld_params ................... False
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   prescale_gradients ........... False
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   scheduler_name ............... None
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   scheduler_params ............. None
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   sparse_attention ............. None
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   sparse_gradients_enabled ..... False
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   steps_per_print .............. 10
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   tensorboard_enabled .......... False
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   tensorboard_job_name ......... DeepSpeedJobName
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   tensorboard_output_path ...... 
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   train_batch_size ............. 128
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   train_micro_batch_size_per_gpu  4
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   wall_clock_breakdown ......... True
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   world_size ................... 8
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   zero_allow_untested_optimizer  True
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   zero_config .................. {
+    "allgather_bucket_size": 500000000,
+    "allgather_partitions": true,
+    "contiguous_gradients": false,
+    "cpu_offload": false,
+    "elastic_checkpoint": true,
+    "load_from_fp32_weights": true,
+    "overlap_comm": false,
+    "reduce_bucket_size": 500000000,
+    "reduce_scatter": true,
+    "stage": 1
+}
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   zero_enabled ................. True
+[2021-05-31 02:45:30,736] [INFO] [config.py:709:print]   zero_optimization_stage ...... 1
+[2021-05-31 02:45:30,736] [INFO] [config.py:711:print]   json = {
+    "activation_checkpointing":{
+        "contiguous_memory_optimization":false,
+        "partition_activations":false
+    },
+    "fp16":{
+        "enabled":true,
+        "hysteresis":2,
+        "initial_scale_power":16,
+        "loss_scale":0,
+        "loss_scale_window":1000
+    },
+    "gradient_accumulation_steps":4,
+    "gradient_clipping":1.0,
+    "steps_per_print":10,
+    "train_micro_batch_size_per_gpu":4,
+    "wall_clock_breakdown":true,
+    "zero_allow_untested_optimizer":true,
+    "zero_optimization":{
+        "stage":1
+    }
+}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:30,761] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7f8d3cf15700>
+[2021-05-31 02:45:30,784] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7f8d3cf157c0>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:4')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([ 2.0158e-04,  7.6485e-04,  8.7309e-04,  ..., -2.3592e-04,
+         4.1413e-04, -5.7697e-05], device='cuda:4', grad_fn=<SliceBackward>), tensor([ 0.0012,  0.0013,  0.0010,  ...,  0.0003, -0.0019,  0.0013],
+       device='cuda:4', grad_fn=<SliceBackward>), tensor([ 2.4140e-05,  1.8156e-04,  1.6034e-04,  ...,  8.6355e-04,
+        -7.5293e-04, -5.3358e-04], device='cuda:4', grad_fn=<SliceBackward>), tensor([ 2.5821e-04,  7.2479e-04,  7.2718e-06,  ..., -2.1648e-03,
+         9.2363e-04, -8.4579e-05], device='cuda:4', grad_fn=<SliceBackward>), tensor([-9.5904e-05, -3.0112e-04, -2.1040e-04,  ..., -8.3387e-05,
+        -4.7278e-04, -1.7776e-03], device='cuda:4', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:4',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:30,852] [INFO] [engine.py:552:_configure_optimizer] DeepSpeed Final Optimizer = <deepspeed.runtime.zero.stage1.FP16_DeepSpeedZeroOptimizer_Stage1 object at 0x7fc0b0153970>
+[2021-05-31 02:45:30,875] [INFO] [engine.py:553:_configure_optimizer] DeepSpeed Final Optimizer = {'loss_scaler': <deepspeed.runtime.fp16.loss_scaler.DynamicLossScaler object at 0x7fc0b0153a30>, 'dynamic_loss_scale': True, 'overflow': False, 'base_optimizer_state': [[{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}, {'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}], [{'exp_avg': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1'), 'exp_avg_sq': tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:1')}]], 'zero_stage': 1, 'partition_count': 8, 'num_comm_intervals_per_group': [5, 1], 'local_sub_partitions_of_fp32_groups': [[tensor([ 0.0002,  0.0005, -0.0010,  ...,  0.0007,  0.0003,  0.0013],
+       device='cuda:1', grad_fn=<SliceBackward>), tensor([0.0024, 0.0007, 0.0018,  ..., 0.0006, 0.0017, 0.0007], device='cuda:1',
+       grad_fn=<SliceBackward>), tensor([-2.7733e-03, -3.9172e-04, -5.1498e-04,  ...,  8.4043e-06,
+        -7.4625e-05,  3.5703e-05], device='cuda:1', grad_fn=<SliceBackward>), tensor([ 0.0010, -0.0013, -0.0002,  ..., -0.0017,  0.0015,  0.0018],
+       device='cuda:1', grad_fn=<SliceBackward>), tensor([-9.7847e-04, -1.2743e-04,  7.6389e-04,  ...,  1.9073e-05,
+        -2.2221e-04,  1.8203e-04], device='cuda:1', grad_fn=<SliceBackward>)], [tensor([1., 1., 1.,  ..., 1., 1., 1.], device='cuda:1',
+       grad_fn=<SliceBackward>)]]}
+/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800
+[2021-05-31 02:45:31,308] [INFO] [engine.py:1286:_load_checkpoint] rank: 1 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_01_model_states.pt
+[2021-05-31 02:45:31,308] [INFO] [engine.py:1286:_load_checkpoint] rank: 5 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_01_model_states.pt
+[2021-05-31 02:45:31,506] [INFO] [engine.py:1286:_load_checkpoint] rank: 0 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_00_model_states.pt
+[2021-05-31 02:45:31,506] [INFO] [engine.py:1286:_load_checkpoint] rank: 4 loading checkpoint: /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_00_model_states.pt
+[2021-05-31 02:46:59,218] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_02optim_states.pt'] does not exist
+[2021-05-31 02:46:59,218] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_02optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_02optim_states.pt'] does not exist
+[2021-05-31 02:47:02,572] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_03optim_states.pt'] does not exist
+[2021-05-31 02:47:02,572] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_03optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_03optim_states.pt'] does not exist
+[2021-05-31 02:47:05,032] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_01optim_states.pt'] does not exist
+[2021-05-31 02:47:05,033] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_01optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_01optim_states.pt'] does not exist
+[2021-05-31 02:47:05,145] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_00optim_states.pt'] does not exist
+[2021-05-31 02:47:05,292] [WARNING] [engine.py:1384:_get_all_zero_checkpoints] Client provided zero checkpoint load paths: ['/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_0_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_1_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_2_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_3_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_4_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_5_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_6_mp_rank_00optim_states.pt', '/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/zero_pp_rank_7_mp_rank_00optim_states.pt'] does not exist
+  successfully loaded /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_00_model_states.pt
+  successfully loaded /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_01_model_states.pt  successfully loaded /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_03_model_states.pt
+
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+  successfully loaded /mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_c3_2_lr0.000003_bs4-4const_drop/800/800/mp_rank_02_model_states.pt
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+<class 'data_utils.tokenization_enc_dec.EncDecTokenizer'>
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Building prefix dict from the default dictionary ...
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Loading model cost 0.662 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.671 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.673 seconds.
+Prefix dict has been built successfully.
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Dumping model to file cache /tmp/jieba.cache
+Loading model cost 0.649 seconds.
+Prefix dict has been built successfully.
+Dumping model to file cache /tmp/jieba.cache
+Loading model cost 0.659 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.647 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.671 seconds.
+Prefix dict has been built successfully.
+Loading model cost 0.701 seconds.
+Prefix dict has been built successfully.
+Path: /mnt/sfs_turbo/data/CLUE/c3/test.json | Ratio:1 | Max enc len: 818 | Max dec len: 2 | Data num: 3892
+[2021-05-31 02:47:09,327] [INFO] [checkpointing.py:63:see_memory_usage] First Forward Begining
+[2021-05-31 02:47:09,327] [INFO] [checkpointing.py:64:see_memory_usage] Memory Allocated 9.319509506225586 GigaBytes
+[2021-05-31 02:47:09,328] [INFO] [checkpointing.py:68:see_memory_usage] Max Memory Allocated 10.617096424102783 GigaBytes
+/opt/conda/lib/python3.8/site-packages/torch/cuda/memory.py:344: FutureWarning: torch.cuda.memory_cached has been renamed to torch.cuda.memory_reserved
+  warnings.warn(
+[2021-05-31 02:47:09,329] [INFO] [checkpointing.py:72:see_memory_usage] Cache Allocated 16.111328125 GigaBytes
+/opt/conda/lib/python3.8/site-packages/torch/cuda/memory.py:352: FutureWarning: torch.cuda.max_memory_cached has been renamed to torch.cuda.max_memory_reserved
+  warnings.warn(
+[2021-05-31 02:47:09,330] [INFO] [checkpointing.py:76:see_memory_usage] Max cache Allocated 16.111328125 GigaBytes
+[2021-05-31 02:47:09,330] [INFO] [checkpointing.py:357:forward] Activation Checkpointing Information
+[2021-05-31 02:47:09,330] [INFO] [checkpointing.py:358:forward] ----Partition Activations False, CPU CHECKPOINTING False
+[2021-05-31 02:47:09,330] [INFO] [checkpointing.py:361:forward] ----contiguous Memory Checkpointing False with 24 total layers
+[2021-05-31 02:47:09,330] [INFO] [checkpointing.py:364:forward] ----Synchronization False
+[2021-05-31 02:47:09,330] [INFO] [checkpointing.py:365:forward] ----Profiling False
+Eval result: loss: 0.535711 | acc: 0.8605
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************

@@ -50,7 +50,10 @@ class T5Dataset(Dataset):
             total_data_num = math.ceil(len(self.data) / total_eval_batch_size) * total_eval_batch_size
             while len(self.data) < total_data_num:
                 tmp = self.data[0].copy()
-                tmp["idx"] = -1
+                if "qidx" in tmp:
+                    tmp["qidx"] = -1
+                else:
+                    tmp["idx"] = -1
                 self.data.append(tmp)
 
         print_str = "Path: {} | Ratio:{} | Max enc len: {} | Max dec len: {} | Data num: {}".format(path, ratio, self.max_enc_len, self.max_dec_len, len(self.data))
@@ -508,19 +511,22 @@ class SogouLogDataset(T5Dataset):
         for key in data:
             if isinstance(data[key], str):
                 ret[key] = data[key].replace("\u3000", " ")
+            else:
+                ret[key] = data[key]
         return ret
 
     def process_data(self):
         data = []
         enc_sizes = []
         dec_sizes = []
-
+        self.do_infer = (self.split == "test")
+        print_rank_0(self.path)
         with open(self.path, "r") as f:
             lines = f.readlines()
         if self.do_infer:
             self.datanum = len(lines)
         else:
-            self.datanum = int(0.2 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
+            self.datanum = int(0.5 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
         for line in lines[:self.datanum]:
             d = json.loads(line)
             d = self.pre_process(d)
