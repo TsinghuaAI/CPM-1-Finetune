@@ -525,8 +525,10 @@ class SogouLogDataset(T5Dataset):
             lines = f.readlines()
         if self.do_infer:
             self.datanum = len(lines)
-        else:
+        elif self.split == "train":
             self.datanum = int(0.5 * len(lines)) # 数据量有点太大了，如果不是做inference的话，那就只用20%的数据
+        else:
+            self.datanum = int(0.2 * len(lines))
         for line in lines[:self.datanum]:
             d = json.loads(line)
             d = self.pre_process(d)

@@ -32,8 +32,8 @@ CACHE_PATH="/cache/"
 DATA_PATH="/mnt/sfs_turbo/data/Sogou-log"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
-#CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/afterDel/mt5_sogou-log_lr0.000005_bs8-4const"
-CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/afterDel/mt5_sogou-log_lr0.000003_bs8-8const_0601"
+# CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/afterDel/mt5_sogou-log_lr0.000005_bs8-4const"
+CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/afterDel/mt5_sogou-log_lr0.000005_bs8-8const_0601"
 
 BATCH_SIZE=8
 GRAD_ACC=8

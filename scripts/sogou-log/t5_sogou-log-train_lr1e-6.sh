@@ -32,21 +32,20 @@ CACHE_PATH="/cache/"
 DATA_PATH="/mnt/sfs_turbo/data/Sogou-log"
 
 CONFIG_PATH="${WORKING_DIR}/configs/model/enc_dec_xlarge_8_config.json"
-# CKPT_PATH="/mnt/sfs_turbo/mt5_origin"
-# CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/afterDel/mt5_sogou-log_lr0.000005_bs8-4const"
-CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/afterDel/mt5_sogou-log_lr0.000005_bs8-8const_0601/800_now_use"
+CKPT_PATH="/mnt/sfs_turbo/enc-dec-pretrain/checkpoints/checkpoint-4-19"
+# CKPT_PATH="/mnt/sfs_turbo/CPM-Finetune-xcj/results/t5_sogou-log/t5_sogou-log_lr0.000003_bs4-4const_drop"
 
 
 BATCH_SIZE=8
 GRAD_ACC=8
-LR=0.000005
+LR=0.000001
 TRAIN_ITER=20000
 EPOCHS=10
 
-SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/afterDel/mt5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const_0601/"
+SAVE_PATH="${WORKING_DIR}/results/t5_sogou-log/afterDel/t5_sogou-log_lr${LR}_bs${BATCH_SIZE}-${GRAD_ACC}const/"
 LOG_FILE="${SAVE_PATH}/log.txt"
 DS_CONFIG="${WORKING_DIR}/configs/deepspeed/ds_finetune_t5.json"
-TOKENIZER_PATH="${WORKING_DIR}/spiece.model"
+TOKENIZER_PATH="${WORKING_DIR}/bpe_new"
 
 ENC_LEN=512
 DEC_LEN=256
@@ -79,7 +78,7 @@ OPTS+=" --clip-grad 1.0"
 OPTS+=" --warmup 0.0"
 OPTS+=" --tokenizer-path ${TOKENIZER_PATH}"
 OPTS+=" --save-interval 400"
-OPTS+=" --eval-interval 400"
+OPTS+=" --eval-interval 200"
 OPTS+=" --eval-iters 10"
 OPTS+=" --log-interval 10"
 OPTS+=" --checkpoint-activations"
@@ -92,8 +91,6 @@ OPTS+=" --do_valid"
 # OPTS+=" --do_eval"
 # OPTS+=" --do_infer"
 OPTS+=" --epochs ${EPOCHS}"
-OPTS+=" --mt5"
-OPTS+=" --temp 10"
 
 CMD="python -m torch.distributed.launch ${DISTRIBUTED_ARGS} ${WORKING_DIR}/finetune_t5.py ${OPTS}"
 
