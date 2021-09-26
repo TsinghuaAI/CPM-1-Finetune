@@ -10,6 +10,7 @@ STC 数据集来源于论文 [Neural Responding Machine for Short-Text Conversat
 
 两个数据集可从[这里](https://drive.google.com/drive/folders/1gL01xbFBcrgP0TmgOhJ_uplkeG-BCwvM)下载。
 
+**若您想使用CPM-1进行推理，我们建议使用高效推理工具[BMInf](https://github.com/OpenBMB/BMInf)，支持1060以上显卡单卡推理。**
 
 ## 1 安装
 
