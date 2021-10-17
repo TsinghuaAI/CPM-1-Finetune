@@ -46,9 +46,7 @@ sudo docker run --gpus '"device=0,1"' -it -v <path>:/CPM  --name=cpm  cpm:v0
 
 **安装 deepspeed**
 
-我们使用了以下版本的 deepspeed：
-<https://github.com/microsoft/DeepSpeed/tree/f0f2a7026877d3fd2f6f5565a67cdffc89750cf0>
-可根据其提供的文档进行安装。
+使用 0.3.15 版本的 [deepspeed](https://github.com/microsoft/DeepSpeed/releases/tag/v0.3.15)，感谢 [#26](https://github.com/TsinghuaAI/CPM-1-Finetune/issues/26) 指出问题。
 
 
 ## 2 Fine-Tune
