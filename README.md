@@ -1,6 +1,6 @@
 # CPM-Finetune
 
-本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的多机多卡训练/测试。目前支持了 ChID 中文成语填空数据集和 STC 中文对话数据集。[[项目首页](https://cpm.baai.ac.cn)] [[模型下载](https://cpm.baai.ac.cn/download.html)] [[技术报告](https://arxiv.org/abs/2012.00413)]
+本仓库为CPM模型的 fine-tune 代码仓库，可以用于模型 fine-tune 的多机多卡训练/测试。目前支持了 ChID 中文成语填空数据集和 STC 中文对话数据集。[[项目首页](https://model.baai.ac.cn/model-detail/100017)] [[模型下载](https://model.baai.ac.cn/model-detail/100017)] [[技术报告](https://arxiv.org/abs/2012.00413)]
 
 同时，该仓库也提供了 ChID 数据集 zero-shot setting 下测试代码。
 
