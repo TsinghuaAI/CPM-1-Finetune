@@ -64,7 +64,8 @@ class GenDataset(torch.utils.data.Dataset):
             while start + self.seq_length + 1 < len(token_ids):
                 samples.append(token_ids[start: start + self.seq_length + 1])
                 start = start + self.seq_length + 1
-            samples.append(token_ids[start:] + [self.pad_id] * (self.seq_length + 1 - (len(token_ids) - start)))
+            if len(token_ids) - start > 1:
+                samples.append(token_ids[start:] + [self.pad_id] * (self.seq_length + 1 - (len(token_ids) - start)))
 
         return samples
 
